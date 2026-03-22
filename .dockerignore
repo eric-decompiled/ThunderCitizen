@@ -1,0 +1,58 @@
+# Keep the build context lean. Anything not needed by the Dockerfile
+# stays out — speeds up `docker build` over slow NICs and avoids leaking
+# secrets/large fetched data into image layers.
+
+# VCS / editor / tooling
+.git
+.gitignore
+.github
+.claude
+.playwright-cli
+.vscode
+.idea
+*.swp
+
+# Local secrets
+.env
+.env.*
+secrets.conf
+
+# Pre-built artifacts — the builder stage regenerates these
+bin/
+tmp/
+/server
+node_modules/
+*_templ.go
+static/css/style.css
+static/css/style.css.map
+static/transit/transit-map.js
+static/transit/transit-map.js.map
+
+# Runtime data — extracted/downloaded artifacts, never code.
+data/
+
+# Fetched source data — large, regenerated via ./bin/fetcher at runtime
+static/transit/gtfs/
+static/budget/fir_*.json
+static/councillors/minutes/
+static/councillors/reports/
+static/councillors/votes_*.json
+# thunderbay.pmtiles is intentionally NOT excluded — static/js/map-tiles.js
+# fetches it at /static/thunderbay.pmtiles for the base map, and DEPLOY.md
+# explicitly documents it as shipped in the image.
+
+# Backups, perftest output, exports
+backups/
+perftest/
+export/
+fetcher
+fetchbudget
+
+# Tests / docs that don't affect the build
+docs/
+*.md
+!README.md
+
+# Compose / DB files unrelated to the app image
+docker-compose.yml
+Dockerfile.db

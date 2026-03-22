@@ -1,0 +1,130 @@
+package components
+
+import "thundercitizen/internal/assets"
+
+func mapWrapClass(props MapProps) string {
+	if props.Class != "" {
+		return "map-wrap " + props.Class
+	}
+	return "map-wrap"
+}
+
+// MapProps configures a shared Leaflet map container.
+type MapProps struct {
+	ID        string          // HTML id for the map div
+	AriaLabel string          // screen reader description
+	Title     string          // compact header title (e.g. "Ward Map")
+	Layers    []MapLayerGroup // layer bar toggle groups in the header
+	Class     string          // extra CSS class on wrapper div
+	Scripts   []string        // JS files loaded after Leaflet
+}
+
+// MapLayerGroup is a labeled set of layer toggle buttons.
+type MapLayerGroup struct {
+	Label  string     // e.g. "Layers"
+	Layers []MapLayer
+}
+
+// MapLayer defines a single toggle button in the layer bar.
+type MapLayer struct {
+	Key    string // data-layer value, e.g. "buses"
+	Label  string // display text
+	Icon   string // raw SVG markup (trusted)
+	Active bool   // initial toggle state
+}
+
+// LeafletMap renders a Leaflet map container with CDN links, Protomaps vector tiles,
+// and a children slot for page-specific overlays.
+func hasHeader(props MapProps) bool {
+	return props.Title != "" || len(props.Layers) > 0
+}
+
+templ LeafletMap(props MapProps) {
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous"/>
+	if hasHeader(props) {
+		<div class="map-header">
+			if props.Title != "" {
+				<span class="map-title">{ props.Title }</span>
+			}
+			@MapLayerBar(props.Layers)
+		</div>
+	}
+	<div
+		class={ mapWrapClass(props) }
+	>
+		<div id={ props.ID } role="region" aria-label={ props.AriaLabel }></div>
+		{ children... }
+	</div>
+	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+	<script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js" integrity="sha384-FhPn/2P/fJGhQLeNWDn9B/2Gml2bPOrKJwFqJXgR3xOPYxWg5mYQ5XZdhUSugZT0" crossorigin="anonymous"></script>
+	<script src="https://unpkg.com/protomaps-leaflet@5.0.0/dist/protomaps-leaflet.js" integrity="sha384-KeIb4wv6BGhSkhTNhLPQI2jcmQmZxMVQNxqM7UUEF5Zbmy+j2KSKRwba0gvAxLRE" crossorigin="anonymous"></script>
+	<script src={ assets.URL("/static/js/map-tiles.js") }></script>
+	for _, s := range props.Scripts {
+		<script src={ assets.URL(s) }></script>
+	}
+	@mapScrollZoomScript(props.ID)
+}
+
+// MapLayerBar renders one or more groups of layer toggle buttons.
+// Page JS reads data-layer attributes and .active class for initial state.
+templ MapLayerBar(groups []MapLayerGroup) {
+	for _, g := range groups {
+		<div class="layer-bar">
+			if g.Label != "" {
+				<span class="layer-bar-label">{ g.Label }</span>
+			}
+			for _, ly := range g.Layers {
+				if ly.Active {
+					<button type="button" class="layer-bar-btn active" data-layer={ ly.Key } title={ ly.Label }>
+						@templ.Raw(ly.Icon)
+						<span>{ ly.Label }</span>
+					</button>
+				} else {
+					<button type="button" class="layer-bar-btn" data-layer={ ly.Key } title={ ly.Label }>
+						@templ.Raw(ly.Icon)
+						<span>{ ly.Label }</span>
+					</button>
+				}
+			}
+		</div>
+	}
+}
+
+// mapScrollZoomScript disables scroll-wheel zoom until the map is clicked,
+// adds a visible focus ring via the map-active class, and moves zoom controls
+// to bottom-left.
+templ mapScrollZoomScript(id string) {
+	<script data-map-id={ id }>
+	(function(){
+		var s = document.currentScript;
+		var mapId = s.getAttribute("data-map-id");
+		var el = document.getElementById(mapId);
+		if (!el) return;
+		function getMap() {
+			return el._leafletMap || null;
+		}
+		var poll = setInterval(function(){
+			var m = getMap();
+			if (!m) return;
+			clearInterval(poll);
+			m.scrollWheelZoom.disable();
+			if (m.zoomControl) { m.zoomControl.setPosition("bottomleft"); }
+			var bounds = L.latLngBounds([[48.10, -89.85], [48.65, -88.75]]);
+			m.setMaxBounds(bounds);
+			var fitZoom = m.getBoundsZoom(bounds, true);
+			if (!m.options.minZoom || m.options.minZoom < fitZoom) { m.setMinZoom(fitZoom); }
+
+			el.setAttribute("tabindex", "0");
+			var isTouch = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+			if (isTouch) {
+				// Touch devices have no scroll wheel; Leaflet handles pinch-zoom directly.
+				m.scrollWheelZoom.enable();
+			} else {
+				el.addEventListener("click", function(){ m.scrollWheelZoom.enable(); el.classList.add("map-active"); });
+				el.addEventListener("blur", function(){ m.scrollWheelZoom.disable(); el.classList.remove("map-active"); });
+				el.addEventListener("mouseleave", function(){ el.blur(); });
+			}
+		}, 50);
+	})();
+	</script>
+}

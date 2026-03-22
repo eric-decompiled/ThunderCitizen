@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    @media (prefers-color-scheme: light) {
+      .bg { fill: #eee8d5; }
+      .bolt { fill: #546e00; stroke: #546e00; }
+    }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1a0d; }
+      .bolt { fill: #4ade80; stroke: #4ade80; }
+    }
+  </style>
+  <rect class="bg" width="32" height="32" rx="6" fill="#0d1a0d"/>
+  <path class="bolt" d="M19 2L7 16h7l-4 14L26 14h-8z" fill="#4ade80" stroke="#4ade80" stroke-width="0.5" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,157 @@
+package pages
+
+import (
+	"fmt"
+	"thundercitizen/internal/views"
+	"thundercitizen/templates"
+)
+
+templ CouncilMeeting(vm views.MeetingViewModel) {
+	@templates.Layout("Minutes") {
+		<div class="meeting-detail-nav">
+			<a href="/minutes">&larr; Back to Minutes</a>
+			if vm.MinutesURL != "" {
+				<a href={ templ.SafeURL(vm.MinutesURL) } target="_blank" rel="noopener" class="meeting-minutes-link">Official Minutes (PDF) &#x2197;</a>
+			}
+		</div>
+		<header class="meeting-detail-header">
+			<p class="meeting-detail-overline">{ vm.TermLabel } · { vm.Weekday }</p>
+			<h1>{ vm.Date }</h1>
+			<p class="meeting-detail-title">City Council Meeting</p>
+			<div class="meeting-stats-bar">
+				<span>{ fmt.Sprintf("%d motions", vm.SubstantiveCount) }</span>
+				if vm.ProceduralCount > 0 {
+					<span>· { fmt.Sprintf("%d procedural", vm.ProceduralCount) }</span>
+				}
+				if vm.RecordedVotes > 0 {
+					<span class="badge badge-vote">{ fmt.Sprintf("%d Recorded", vm.RecordedVotes) }</span>
+				}
+			</div>
+		</header>
+		if vm.SubstantiveCount > 0 {
+			<h2>Motions</h2>
+			<div class="meetings-list">
+				for i, m := range vm.Motions {
+					if !m.IsProcedural {
+						@substantiveMotion(m, i)
+					}
+				}
+			</div>
+		}
+		if vm.ProceduralCount > 0 {
+			<h2>Procedural</h2>
+			<div class="meetings-list">
+				for i, m := range vm.Motions {
+					if m.IsProcedural {
+						@proceduralMotion(m, i)
+					}
+				}
+			</div>
+		}
+	}
+}
+
+// proceduralMotion renders a compact procedural item.
+templ proceduralMotion(m views.MotionView, index int) {
+	<div class="meeting-row motion-procedural-row" id={ fmt.Sprintf("motion-%d", m.ID) }>
+		<div class="motion-row-header">
+			<a href={ templ.SafeURL(fmt.Sprintf("#motion-%d", m.ID)) } class="motion-index" title="Link to this motion">{ fmt.Sprintf("#%d", index+1) }</a>
+			if m.Result != "" {
+				<span class={ "badge", "badge-" + m.ResultClass }>{ m.Result }</span>
+			}
+			<span class="motion-procedural-text">
+				if m.Summary != "" {
+					{ m.Summary }
+				} else if m.AgendaItem != "" {
+					{ m.AgendaItem }
+				} else {
+					{ m.TextPreview }
+				}
+			</span>
+		</div>
+		<div class="meeting-row-meta">
+			<span>Moved by { m.MovedBy }</span>
+			if m.SecondedBy != "" {
+				<span>, seconded by { m.SecondedBy }</span>
+			}
+		</div>
+	</div>
+}
+
+// substantiveMotion renders a full motion card with clause breakdown.
+templ substantiveMotion(m views.MotionView, index int) {
+	<div class={ "meeting-row motion-substantive", templ.KV("motion-lost", m.Result == "LOST"), templ.KV("motion-voted", m.HasVote && m.Result != "LOST") } id={ fmt.Sprintf("motion-%d", m.ID) }>
+		if m.AgendaItem != "" {
+			<h3 class="motion-heading">{ m.AgendaItem }</h3>
+		}
+		<div class="motion-row-header">
+			<a href={ templ.SafeURL(fmt.Sprintf("#motion-%d", m.ID)) } class="motion-index" title="Link to this motion">{ fmt.Sprintf("#%d", index+1) }</a>
+			if m.Result != "" {
+				<span class={ "badge", "badge-" + m.ResultClass }>{ m.Result }</span>
+			}
+			if m.Significance == "headline" || m.Significance == "notable" {
+				<span class={ "badge", "badge-" + m.Significance }>{ m.Significance }</span>
+			}
+			if m.HasVote {
+				<span class="badge badge-vote">Recorded vote: { m.VoteSummary }</span>
+			}
+		</div>
+		if m.Summary != "" {
+			<p class="motion-row-summary">{ m.Summary }</p>
+		}
+		if len(m.TextClauses) > 1 {
+			<p class="motion-text">{ m.TextClauses[0] }</p>
+			<ul class="motion-clauses">
+				for _, clause := range m.TextClauses[1:] {
+					<li>{ clause }</li>
+				}
+			</ul>
+		} else {
+			<p class="motion-text">{ m.Text }</p>
+		}
+		<div class="meeting-row-meta">
+			<span>
+				Moved by <a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(m.MovedBy)) }><strong>{ m.MovedBy }</strong></a>
+				if m.SecondedBy != "" {
+					, seconded by <a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(m.SecondedBy)) }><strong>{ m.SecondedBy }</strong></a>
+				}
+			</span>
+			if m.MediaURL != "" {
+				<a href={ templ.SafeURL(m.MediaURL) } target="_blank" rel="noopener" class="meeting-row-btn">Media coverage &#x2197;</a>
+			}
+		</div>
+		if m.Votes != nil {
+			<details class="vote-details" open>
+				<summary>Vote breakdown ({ m.VoteSummary })</summary>
+				<div class="grid">
+					<div>
+						<h4>Yea ({ fmt.Sprintf("%d", m.YeaCount) })</h4>
+						<ul>
+							for _, name := range m.Votes.For {
+								<li><a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(name)) }>{ name }</a></li>
+							}
+						</ul>
+					</div>
+					<div>
+						<h4>Nay ({ fmt.Sprintf("%d", m.NayCount) })</h4>
+						<ul>
+							for _, name := range m.Votes.Against {
+								<li><a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(name)) }>{ name }</a></li>
+							}
+						</ul>
+					</div>
+					if len(m.Votes.Absent) > 0 {
+						<div>
+							<h4>Absent ({ fmt.Sprintf("%d", len(m.Votes.Absent)) })</h4>
+							<ul>
+								for _, name := range m.Votes.Absent {
+									<li><a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(name)) }>{ name }</a></li>
+								}
+							</ul>
+						</div>
+					}
+				</div>
+			</details>
+		}
+	</div>
+}

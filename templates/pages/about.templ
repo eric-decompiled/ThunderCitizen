@@ -1,0 +1,73 @@
+package pages
+
+import (
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ About() {
+	@templates.Layout("About") {
+		@components.PageHeader(components.PageHeaderProps{
+			Title: "About",
+		})
+
+		@components.Card(components.CardProps{Title: "What this is"}) {
+			<p><strong>Thunder Citizen</strong> makes public data accessible to the general public &mdash; transit performance, council votes, city budgets, and more.</p>
+			<p>This information is already public, but it&rsquo;s scattered across feeds, PDFs, and meeting minutes that most people will never read. We collect it, organize it, and present it in one place.</p>
+		}
+
+		@components.Card(components.CardProps{Title: "How it works"}) {
+			<p>Transit data comes from Thunder Bay Transit's real-time feeds. Council votes are scraped from the city's published minutes. Budget figures reference specific pages in official documents.</p>
+			<svg viewBox="0 0 760 130" fill="none" role="img" aria-label="Data pipeline: public sources flow through collect, process, and publish stages." style="width:100%; max-width:840px; font-family:var(--font-mono); margin-top:0.5rem;">
+				<path d="M42,48 a14,14 0 0,1 7,-14 a11,11 0 0,1 18,-2 a13,13 0 0,1 22,9 a9,9 0 0,1 -2,13 h-40 a10,10 0 0,1 -5,-6z" stroke="var(--term-fg-dim)" stroke-width="1.5" fill="none"/>
+				<text x="62" y="82" text-anchor="middle" fill="var(--term-fg-dim)" font-size="9" font-weight="600">PUBLIC</text>
+				<text x="62" y="93" text-anchor="middle" fill="var(--term-fg-dim)" font-size="9" font-weight="600">SOURCES</text>
+				<line x1="105" y1="58" x2="138" y2="58" stroke="var(--term-fg-dim)" stroke-width="1.5"/>
+				<polygon points="138,53 148,58 138,63" fill="var(--term-fg-dim)"/>
+				<rect x="152" y="14" width="440" height="88" rx="6" stroke="var(--accent)" stroke-width="1" stroke-dasharray="6 3" fill="none" opacity="0.5"/>
+				<text x="372" y="28" text-anchor="middle" fill="var(--accent)" font-size="8" font-weight="600" letter-spacing="0.1em" opacity="0.6">THUNDER CITIZEN</text>
+				<rect x="168" y="36" width="120" height="44" rx="4" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
+				<text x="228" y="54" text-anchor="middle" fill="var(--accent)" font-size="11" font-weight="700" letter-spacing="0.05em">COLLECT</text>
+				<text x="228" y="70" text-anchor="middle" fill="var(--term-fg-dim)" font-size="9">download + record</text>
+				<line x1="292" y1="58" x2="314" y2="58" stroke="var(--term-fg-dim)" stroke-width="1.5"/>
+				<polygon points="314,53 324,58 314,63" fill="var(--term-fg-dim)"/>
+				<rect x="328" y="36" width="120" height="44" rx="4" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
+				<text x="388" y="54" text-anchor="middle" fill="var(--accent)" font-size="11" font-weight="700" letter-spacing="0.05em">PROCESS</text>
+				<text x="388" y="70" text-anchor="middle" fill="var(--term-fg-dim)" font-size="9">parse, cite, compute</text>
+				<line x1="452" y1="58" x2="474" y2="58" stroke="var(--term-fg-dim)" stroke-width="1.5"/>
+				<polygon points="474,53 484,58 474,63" fill="var(--term-fg-dim)"/>
+				<rect x="488" y="36" width="90" height="44" rx="4" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
+				<text x="533" y="54" text-anchor="middle" fill="var(--accent)" font-size="11" font-weight="700" letter-spacing="0.05em">PUBLISH</text>
+				<text x="533" y="70" text-anchor="middle" fill="var(--term-fg-dim)" font-size="9">store + serve</text>
+				<line x1="596" y1="58" x2="628" y2="58" stroke="var(--term-fg-dim)" stroke-width="1.5"/>
+				<polygon points="628,53 638,58 628,63" fill="var(--term-fg-dim)"/>
+				<rect x="648" y="42" width="26" height="18" rx="2" stroke="var(--term-fg-dim)" stroke-width="1.5"/>
+				<line x1="644" y1="62" x2="678" y2="62" stroke="var(--term-fg-dim)" stroke-width="1.5"/>
+				<rect x="686" y="38" width="13" height="24" rx="2" stroke="var(--term-fg-dim)" stroke-width="1.5"/>
+				<circle cx="692.5" cy="57" r="1.2" fill="var(--term-fg-dim)"/>
+				<text x="678" y="82" text-anchor="middle" fill="var(--term-fg-dim)" font-size="9" font-weight="600">PUBLIC</text>
+			</svg>
+		}
+
+		@components.Card(components.CardProps{Title: "Disclaimer"}) {
+			<p>Thunder Citizen is an independent project. It is not affiliated with, endorsed by, or connected to the City of Thunder Bay.</p>
+			<p>All data is derived from publicly available sources on a best-effort basis. It has not been verified, audited, or approved by any official body. It may contain errors, gaps, or misinterpretations. Reader discretion is advised.</p>
+			<p>This site is provided as-is without warranty of any kind, express or implied, including warranties of merchantability or fitness for a particular purpose. Nothing here should be treated as an authoritative source for decision-making, reporting, or legal proceedings.</p>
+			<p>For official data and reports, refer to the <a href="https://www.thunderbay.ca" target="_blank" rel="noopener">City of Thunder Bay</a>.</p>
+		}
+
+		@components.Card(components.CardProps{Title: "Contact"}) {
+			<p>Corrections or questions: <a href="mailto:eric@decompiled.dev">eric@decompiled.dev</a></p>
+		}
+
+		@components.Card(components.CardProps{Title: "Other local sites we like"}) {
+			<p>No affiliation — just other locals building useful things for Thunder Bay.</p>
+			<ul>
+				<li><a href="https://tbshows.com/" target="_blank" rel="noopener">TB Shows</a> — What's on this weekend</li>
+				<li><a href="https://justthemenu.ca/" target="_blank" rel="noopener">Just The Menu</a> — Local restaurant menus, no fluff</li>
+				<li><a href="https://opendata.thunderbay.ca/" target="_blank" rel="noopener">Thunder Bay Open Data</a> — The city's open data portal</li>
+			</ul>
+		}
+
+	}
+}

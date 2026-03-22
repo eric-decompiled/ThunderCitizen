@@ -1,0 +1,452 @@
+package pages
+
+import (
+	"fmt"
+	"strings"
+	"thundercitizen/internal/models"
+	"thundercitizen/internal/views"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+func statusBadgeClass(status string) string {
+	if status != "" {
+		return "badge-muted"
+	}
+	return ""
+}
+
+func wardLayerGroups() []components.MapLayerGroup {
+	return []components.MapLayerGroup{{
+		Label: "Layers",
+		Layers: []components.MapLayer{
+			{Key: "wards", Label: "Wards", Active: true, Icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/></svg>`},
+		},
+	}}
+}
+
+// matrixColSpan returns the total number of columns (2 fixed + councillors) as a string.
+// matrixColSpan returns the total column count (3 fixed + councillors) as a string.
+func matrixColSpan(numRows int) string {
+	return fmt.Sprintf("%d", numRows+3)
+}
+
+// matrixDateColSpan returns the colspan for date rows (total - 1 for the leading td).
+func matrixDateColSpan(numRows int) string {
+	return fmt.Sprintf("%d", numRows+1)
+}
+
+// voteNames collects councillor names with a given position at a column index.
+func voteNames(rows []views.VoteMatrixRow, colIdx int, position string) string {
+	var names []string
+	for _, r := range rows {
+		if r.Cells[colIdx] == position {
+			names = append(names, r.Name)
+		}
+	}
+	return strings.Join(names, ",")
+}
+
+func voteTally(rows []views.VoteMatrixRow, colIdx int) string {
+	var f, a int
+	for _, r := range rows {
+		switch r.Cells[colIdx] {
+		case "for":
+			f++
+		case "against":
+			a++
+		}
+	}
+	return fmt.Sprintf("%d For · %d Against", f, a)
+}
+
+templ compensationSource(ref models.SourceRef) {
+	<p class="compensation-source">
+		<span>Source: </span>
+		@components.SourceLink(ref)
+	</p>
+}
+
+templ accordionToggle() {
+	<div class="layer-bar-group">
+		<button type="button" class="layer-bar-btn" id="toggle-all-councillors">Open all</button>
+	</div>
+}
+
+templ Councillors(vm views.CouncillorsViewModel) {
+	@templates.Layout("Councillors") {
+		<div id="councillor-content">
+			@CouncillorsPartial(vm)
+		</div>
+
+		@voteMatrixModal()
+		@voteMatrixPhotoSync()
+		@components.AccordionAnimateScript()
+	}
+}
+
+// CouncillorsPartial renders the content inside #councillor-content.
+// Used by HTMX on term switch and by the full page on initial load.
+templ CouncillorsPartial(vm views.CouncillorsViewModel) {
+	<div class="councillor-sticky-area">
+		@components.YearSelector(vm.TermSelector)
+		@components.TermPanel(components.TermPanelProps{Title: "Council Structure", Footer: compensationSource(vm.Source)}) {
+			<p class="compensation-lead">Thunder Bay's 13-member council: 1 mayor, 5 at-large, and 7 ward representatives.</p>
+			@components.TermMetricGrid(components.TermMetricGridProps{Cols: 3}) {
+				for _, item := range vm.CompensationStats.Items {
+					@components.TermMetric(components.TermMetricProps{Value: item.Value, Label: item.Label, Note: item.Note, Tooltip: item.Tooltip})
+				}
+			}
+		}
+
+	@components.TermPanel(components.TermPanelProps{Title: "Members", HeaderAction: accordionToggle()}) {
+		<h3 class="section-subheader">Mayor</h3>
+		<div data-section="mayor">
+			@councillorItem(vm.Mayor)
+		</div>
+
+		<h3 class="section-subheader">At-Large <small>Elected citywide</small></h3>
+		<div data-section="atLarge">
+			for _, c := range vm.AtLargeCouncillors {
+				@councillorItem(c)
+			}
+		</div>
+
+		<h3 class="section-subheader">Ward <small>Elected by geographic area</small></h3>
+		<div data-section="ward">
+			for _, c := range vm.WardCouncillors {
+				@wardCouncillorItem(c)
+			}
+		</div>
+
+	}
+
+	if vm.VoteMatrix != nil && len(vm.VoteMatrix.Columns) > 0 {
+		@components.TermPanel(components.TermPanelProps{Title: "Notable Votes"}) {
+			@voteMatrix(vm.VoteMatrix)
+		}
+	}
+	</div>
+
+	<article class="ward-map-fullscreen">
+		@components.LeafletMap(components.MapProps{
+			ID:        "ward-map",
+			AriaLabel: "Map of Thunder Bay ward boundaries",
+			Title:     "Ward Map",
+			Layers:    wardLayerGroups(),
+			Scripts:   []string{"/static/councillors/ward-map.js"},
+		}) {
+			<div id="ward-info-bar" class="ward-info-bar"></div>
+		}
+	</article>
+}
+
+templ wardCouncillorItem(c views.CouncillorView) {
+	@components.AccordionItem(components.AccordionItemProps{
+		ID:        c.ID,
+		Title:     c.Name,
+		Avatar:    c.Initials,
+		Photo:     c.Photo,
+		Subtitle:  c.Position,
+		Note:      c.Term,
+		NoteClass: c.TermClass,
+		Badge:      c.Status,
+		BadgeClass: statusBadgeClass(c.Status),
+		WardName:   c.Position,
+	}) {
+		<p>{ c.Summary }</p>
+		@councillorVoteStats(c)
+	}
+}
+
+templ councillorItem(c views.CouncillorView) {
+	@components.AccordionItem(components.AccordionItemProps{
+		ID:         c.ID,
+		Title:      c.Name,
+		Avatar:     c.Initials,
+		Photo:      c.Photo,
+		Subtitle:   c.Position,
+		Note:       c.Term,
+		NoteClass:  c.TermClass,
+		Badge:      c.Status,
+		BadgeClass: statusBadgeClass(c.Status),
+	}) {
+		<p>{ c.Summary }</p>
+		@councillorVoteStats(c)
+	}
+}
+
+templ councillorVoteStats(c views.CouncillorView) {
+	if c.VoteStats != nil {
+		<div class="councillor-votes">
+			<p class="vote-summary">
+				{ c.VoteStats.ForCount } for · { c.VoteStats.AgainstCount } against across recorded votes · <span class="vote-dissent-rate">{ c.VoteStats.DissentRate } dissent</span>
+			</p>
+		</div>
+	}
+}
+
+templ voteMatrix(vm *views.VoteMatrixViewModel) {
+	<div class="vote-matrix-desktop">
+		@voteMatrixHeader(vm)
+		<div class="vote-matrix-wrapper">
+				<table class="vote-matrix">
+					<caption class="sr-only">Councillor voting record on recorded votes</caption>
+					<thead class="vote-matrix-sizing-head">
+						@voteMatrixHeadRows(vm)
+					</thead>
+					<tbody>
+						for colIdx, col := range vm.Columns {
+							if colIdx == 0 || col.Date != vm.Columns[colIdx-1].Date {
+								<tr class="vote-matrix-date-row">
+									<td></td>
+									<td colspan={ matrixDateColSpan(len(vm.Rows)) }>
+										<a href={ templ.SafeURL(col.MeetingURL) }>{ col.Date }</a>
+									</td>
+								</tr>
+							}
+							<tr
+								data-motion-title={ col.FullTitle }
+								data-motion-summary={ col.Summary }
+								data-motion-date={ col.Date }
+								data-motion-result={ col.Result }
+								data-motion-url={ col.URL }
+								data-motion-for={ voteNames(vm.Rows, colIdx, "for") }
+								data-motion-against={ voteNames(vm.Rows, colIdx, "against") }
+							>
+								<td class="vote-matrix-result-cell">
+									if col.Result == "Lost" || col.Result == "Tie" {
+										<span class={ "vote-matrix-result-badge", "vote-matrix-result--" + strings.ToLower(col.Result) }>{ col.Result }</span>
+									} else {
+										<span class="vote-matrix-result-badge vote-matrix-result--carried">Carried</span>
+									}
+									if col.MediaURL != "" {
+										<a href={ templ.SafeURL(col.MediaURL) } target="_blank" rel="noopener" class="vote-matrix-media-badge" title="Press coverage">TBNews <span class="media-arrow">&#x2197;</span></a>
+									}
+								</td>
+								<th class="vote-matrix-motion" scope="row">
+									{ col.Label }
+								</th>
+								for _, row := range vm.Rows {
+									if row.Cells[colIdx] == "for" {
+										<td class="vote-cell vote-cell-for" title={ row.Name + ": For" }><span class="sr-only">For</span></td>
+									} else if row.Cells[colIdx] == "against" {
+										<td class="vote-cell vote-cell-against" title={ row.Name + ": Against" }><span class="sr-only">Against</span></td>
+									} else {
+										<td class="vote-cell vote-cell-absent" title={ row.Name + ": Not recorded" }><span class="sr-only">Not recorded</span></td>
+									}
+								}
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+	</div>
+	@voteMatrixMobile(vm)
+}
+
+templ voteMatrixMobile(vm *views.VoteMatrixViewModel) {
+	<div class="vote-matrix-mobile">
+		for colIdx, col := range vm.Columns {
+			if colIdx == 0 || col.Date != vm.Columns[colIdx-1].Date {
+				<div class="vote-matrix-mobile-date">
+					<a href={ templ.SafeURL(col.MeetingURL) }>{ col.Date }</a>
+				</div>
+			}
+			<div
+				class="vote-matrix-card"
+				data-motion-title={ col.FullTitle }
+				data-motion-summary={ col.Summary }
+				data-motion-date={ col.Date }
+				data-motion-result={ col.Result }
+				data-motion-url={ col.URL }
+				data-motion-for={ voteNames(vm.Rows, colIdx, "for") }
+				data-motion-against={ voteNames(vm.Rows, colIdx, "against") }
+			>
+				<div class="vote-matrix-card-top">
+					if col.Result == "Lost" || col.Result == "Tie" {
+						<span class={ "vote-matrix-result-badge", "vote-matrix-result--" + strings.ToLower(col.Result) }>{ col.Result }</span>
+					} else {
+						<span class="vote-matrix-result-badge vote-matrix-result--carried">Carried</span>
+					}
+					<span class="vote-matrix-card-label">{ col.Label }</span>
+				</div>
+				<div class="vote-matrix-card-bottom">
+					if col.MediaURL != "" {
+						<a href={ templ.SafeURL(col.MediaURL) } target="_blank" rel="noopener" class="vote-matrix-media-badge" title="Press coverage" onclick="event.stopPropagation()">TBNews <span class="media-arrow">&#x2197;</span></a>
+					}
+					<span class="vote-matrix-card-tally">{ voteTally(vm.Rows, colIdx) }</span>
+				</div>
+			</div>
+		}
+	</div>
+}
+
+templ voteMatrixNamesRow(vm *views.VoteMatrixViewModel) {
+	<tr class="vote-matrix-names">
+		<th class="vote-matrix-label"></th>
+		<th class="vote-matrix-label"></th>
+		for _, row := range vm.Rows {
+			<th class="vote-matrix-councillor">
+				<span>{ row.Name }</span>
+			</th>
+		}
+	</tr>
+}
+
+templ voteMatrixPhotosRow(vm *views.VoteMatrixViewModel) {
+	<tr class="vote-matrix-photos">
+		<td class="vote-matrix-label"></td>
+		<td class="vote-matrix-label"></td>
+		for _, row := range vm.Rows {
+			<td class="vote-matrix-photo-cell">
+				<span class="photo-tip" title={ row.Name } tabindex="0">
+					if row.Photo != "" {
+						<img class="vote-matrix-avatar" src={ row.Photo } alt={ row.Name }/>
+					} else {
+						<span class="vote-matrix-initials">{ row.Initials }</span>
+					}
+				</span>
+			</td>
+		}
+	</tr>
+}
+
+// Shared rows for the sizing thead (hidden, sets column widths)
+templ voteMatrixHeadRows(vm *views.VoteMatrixViewModel) {
+	@voteMatrixNamesRow(vm)
+	@voteMatrixPhotosRow(vm)
+}
+
+templ voteMatrixHeader(vm *views.VoteMatrixViewModel) {
+	<div class="vote-matrix-sticky-header">
+		<div class="vote-matrix-sticky-scroll">
+			<table class="vote-matrix">
+				@voteMatrixNamesRow(vm)
+				@voteMatrixPhotosRow(vm)
+			</table>
+		</div>
+	</div>
+}
+
+templ voteMatrixModal() {
+	<dialog id="vote-matrix-modal" class="motion-modal">
+		<article class="motion-modal-content">
+			<button aria-label="Close" class="motion-modal-close">&times;</button>
+			<div class="motion-modal-header">
+				<span id="vote-modal-result" class="motion-modal-result"></span>
+				<h3 id="vote-modal-title" class="motion-modal-title"></h3>
+			</div>
+			<p id="vote-modal-summary" class="motion-modal-summary"></p>
+			<div class="motion-modal-vote-split">
+				<div class="motion-modal-side motion-modal-for">
+					<span class="motion-modal-side-label">For</span>
+					<div id="vote-modal-for" class="motion-modal-names"></div>
+				</div>
+				<div class="motion-modal-divider"></div>
+				<div class="motion-modal-side motion-modal-against">
+					<span class="motion-modal-side-label">Against</span>
+					<div id="vote-modal-against" class="motion-modal-names"></div>
+				</div>
+			</div>
+			<div class="motion-modal-footer">
+				<span id="vote-modal-date"></span>
+				<a id="vote-modal-link" href="#">View full minutes</a>
+			</div>
+		</article>
+	</dialog>
+	<script>
+	(function() {
+		var modal = document.getElementById('vote-matrix-modal');
+		if (!modal) return;
+
+		function openModal(row) {
+			var title = row.dataset.motionTitle || '';
+			var summary = row.dataset.motionSummary || '';
+			var result = row.dataset.motionResult || '';
+
+			document.getElementById('vote-modal-title').textContent = title || summary;
+
+			var sumEl = document.getElementById('vote-modal-summary');
+			if (summary && summary !== title) {
+				sumEl.textContent = summary;
+				sumEl.style.display = '';
+			} else {
+				sumEl.style.display = 'none';
+			}
+
+			var resultEl = document.getElementById('vote-modal-result');
+			resultEl.textContent = result;
+			resultEl.className = 'motion-modal-result motion-modal-result--' + result.toLowerCase();
+
+			document.getElementById('vote-modal-date').textContent = row.dataset.motionDate;
+			document.getElementById('vote-modal-link').href = row.dataset.motionUrl;
+
+			var forNames = row.dataset.motionFor ? row.dataset.motionFor.split(',') : [];
+			var againstNames = row.dataset.motionAgainst ? row.dataset.motionAgainst.split(',') : [];
+			document.getElementById('vote-modal-for').innerHTML = forNames.map(function(n) { return '<span>' + n + '</span>'; }).join('');
+			document.getElementById('vote-modal-against').innerHTML = againstNames.map(function(n) { return '<span>' + n + '</span>'; }).join('');
+
+			modal.showModal();
+		}
+
+		function closeModal() {
+			modal.classList.add('motion-modal-closing');
+			modal.addEventListener('animationend', function handler() {
+				modal.classList.remove('motion-modal-closing');
+				modal.close();
+				modal.removeEventListener('animationend', handler);
+			}, { once: true });
+		}
+
+		// Use document delegation so it survives HTMX DOM swaps
+		document.addEventListener('click', function(e) {
+			var row = e.target.closest('[data-motion-title]');
+			if (row) openModal(row);
+		});
+
+		modal.querySelector('.motion-modal-close').addEventListener('click', closeModal);
+		modal.addEventListener('click', function(e) {
+			if (e.target === modal) closeModal();
+		});
+
+	})();
+	</script>
+}
+
+templ voteMatrixPhotoSync() {
+	<script>
+	(function() {
+		function sync() {
+			var w = document.querySelector('.vote-matrix-wrapper');
+			var s = document.querySelector('.vote-matrix-sticky-scroll');
+			if (!w || !s) return;
+			// Sync column widths from a data row
+			var dataRows = w.querySelectorAll('tbody tr:not(.vote-matrix-date-row)');
+			var dr = dataRows.length > 0 ? dataRows[0] : null;
+			if (dr) {
+				s.querySelectorAll('tr').forEach(function(pr) {
+					for (var i = 0; i < dr.children.length && i < pr.children.length; i++)
+						pr.children[i].style.width = dr.children[i].offsetWidth + 'px';
+				});
+			}
+			// Hide thead in table (kept for column sizing)
+			var thead = w.querySelector('.vote-matrix-sizing-head');
+			if (thead) thead.style.visibility = 'collapse';
+			// Sync horizontal scroll — rAF-throttled, passive for iOS scroll perf.
+			var ticking = false;
+			w.onscroll = null;
+			w.addEventListener('scroll', function() {
+				if (ticking) return;
+				ticking = true;
+				requestAnimationFrame(function() {
+					s.scrollLeft = w.scrollLeft;
+					ticking = false;
+				});
+			}, { passive: true });
+		}
+		sync();
+		document.body.addEventListener('htmx:afterSwap', sync);
+	})();
+	</script>
+}

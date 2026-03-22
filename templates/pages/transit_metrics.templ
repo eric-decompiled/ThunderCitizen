@@ -1,0 +1,143 @@
+package pages
+
+import (
+	"thundercitizen/internal/assets"
+	"thundercitizen/internal/transit"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+// kpiDef holds the static definition of a KPI card.
+type kpiDef struct {
+	Key     string
+	Label   string
+	Tag     string
+	Explain string
+	Unit    string // "%" or "min" or ""
+	// Percentile slot overrides (defaults to p50/p90/p99)
+	Slots [3]struct{ Attr, Class, Label string }
+}
+
+var kpiDefs = []kpiDef{
+	{
+		Key: "otp", Label: "On-Time Performance", Tag: "Schedule", Unit: "%",
+		Explain: "Share of trips arriving within 1 min early to 5 min late. The core measure of whether the published schedule matches reality.",
+		Slots: [3]struct{ Attr, Class, Label string }{
+			{"otp_morn", "kpi-p50", "Morning"},
+			{"otp_mid", "kpi-p90", "Midday"},
+			{"otp_eve", "kpi-p99", "Evening"},
+		},
+	},
+	{
+		Key: "cancel", Label: "Cancellation Rate", Tag: "Schedule", Unit: "%",
+		Explain: "Scheduled trips that never ran. A cancelled bus means someone waited for nothing or missed a connection.",
+		Slots: [3]struct{ Attr, Class, Label string }{
+			{"cancel_morn", "kpi-p50", "Morning"},
+			{"cancel_mid", "kpi-p90", "Midday"},
+			{"cancel_eve", "kpi-p99", "Evening"},
+		},
+	},
+	{
+		Key: "ewt", Label: "Excess Wait Time", Tag: "Delay", Unit: "min",
+		Explain: "Extra minutes a random rider waits beyond the scheduled headway, measured across all stops. Compared against the published GTFS schedule.",
+		Slots: [3]struct{ Attr, Class, Label string }{
+			{"ewt_morn", "kpi-p50", "Morning"},
+			{"ewt_mid", "kpi-p90", "Midday"},
+			{"ewt_eve", "kpi-p99", "Evening"},
+		},
+	},
+	{
+		Key: "cv", Label: "Headway Cv", Tag: "Regularity",
+		Explain: "How evenly spaced buses are. Lower means predictable waits; higher means bunching and long gaps.",
+		Slots: [3]struct{ Attr, Class, Label string }{
+			{"cv_morn", "kpi-p50", "Morning"},
+			{"cv_mid", "kpi-p90", "Midday"},
+			{"cv_eve", "kpi-p99", "Evening"},
+		},
+	},
+}
+
+func kpiCardClass(active, current string) string {
+	if active == current {
+		return "kpi-card kpi-active"
+	}
+	return "kpi-card"
+}
+
+var kpiTitles = map[string]string{
+	"otp": "On-Time Performance", "cancel": "Cancellation Rate",
+	"ewt": "Excess Wait Time", "cv": "Headway Covariance",
+}
+
+templ TransitMetrics(vm transit.MetricsViewModel) {
+	@templates.Layout("Transit — " + kpiTitles[vm.KPI]) {
+		@components.TransitNav(components.TransitNavProps{Current: "metrics"})
+
+		<section class="metrics-panel" aria-label="System performance metrics">
+			<div class="metrics-panel-header">
+				<span class="terminal-map-title">System Metrics</span>
+				@dateRangeNav(vm.Range)
+			</div>
+			<div class="metrics-disclaimer">
+				<strong>Disclaimer:</strong> Statistics based on best-effort observations of the GTFS feed. There may be gaps in our data or errors in our calculations. Provided as-is with no warranty nor liability.
+			</div>
+			<div class="kpi-grid" data-active-kpi={ vm.KPI }>
+				for _, d := range kpiDefs {
+					<div class={ kpiCardClass(vm.KPI, d.Key) } data-kpi={ d.Key } { kpiPctAttrs(d)... }>
+						<div class="kpi-card-top">
+							<span class="kpi-label">{ d.Label }</span>
+							<span class="kpi-tag">{ d.Tag }</span>
+						</div>
+						<div class="kpi-card-body">
+							<div class="kpi-card-data">
+								<div class="kpi-big">
+									<span class="kpi-value">{ transit.KPIFromChunks(vm.Chunks, d.Key, "") }</span>
+									if d.Unit != "" {
+										<small>{ d.Unit }</small>
+									}
+									<span class="kpi-avg">avg</span>
+								</div>
+							</div>
+							<div class="kpi-card-explain">{ d.Explain }</div>
+							<div class="kpi-pcts">
+								<div class="kpi-pct kpi-pct-1"><span class={ d.Slots[0].Class }>{ transit.KPIFromChunks(vm.Chunks, d.Key, "morning") }</span><span class="kpi-pct-label">{ d.Slots[0].Label }</span></div>
+								<span class="kpi-pct-sep"></span>
+								<div class="kpi-pct kpi-pct-2"><span class={ d.Slots[1].Class }>{ transit.KPIFromChunks(vm.Chunks, d.Key, "midday") }</span><span class="kpi-pct-label">{ d.Slots[1].Label }</span></div>
+								<span class="kpi-pct-sep"></span>
+								<div class="kpi-pct kpi-pct-3"><span class={ d.Slots[2].Class }>{ transit.KPIFromChunks(vm.Chunks, d.Key, "evening") }</span><span class="kpi-pct-label">{ d.Slots[2].Label }</span></div>
+							</div>
+						</div>
+					</div>
+				}
+			</div>
+
+			<div class="kpi-chart-container" id="cancel-log-container" hidden>
+				<h3>Cancelled Trips</h3>
+				<div id="cancel-log"></div>
+			</div>
+
+			<div class="kpi-chart-container">
+				<h3 id="route-compare-title">Route Comparison</h3>
+				<div id="route-compare-chart"></div>
+			</div>
+			<div id="route-compare-data" hidden></div>
+		</section>
+
+		@templ.JSONScript("route-meta", vm.RouteMeta)
+		@templ.JSONScript("transit-chunks", vm.Chunks)
+		@templ.JSONScript("cancelled-trips", vm.CancelledTrips)
+		<script src={ assets.URL("/static/transit/chunks.js") }></script>
+		<script src={ assets.URL("/static/transit/transit-report.js") }></script>
+		<script src={ assets.URL("/static/transit/trends-chart.js") }></script>
+	}
+}
+
+func kpiPctAttrs(d kpiDef) templ.Attributes {
+	attrs := templ.Attributes{}
+	// Map slot index to data attributes for JS (vestigial — values are server-rendered).
+	slotNames := [3]string{"p50", "p90", "p99"}
+	for i, name := range slotNames {
+		attrs["data-"+name] = d.Slots[i].Attr
+	}
+	return attrs
+}

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 180" font-family="ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace" font-size="12">
+  <style>
+    .box { rx: 6; ry: 6; stroke-width: 1.5; }
+    .extract { fill: #e8f4f8; stroke: #4a9abb; }
+    .transform { fill: #fff3e0; stroke: #e8943a; }
+    .load { fill: #e8f5e9; stroke: #4caf50; }
+    .arrow { fill: none; stroke: #888; stroke-width: 1.5; marker-end: url(#arrow); }
+    .label { font-weight: 700; font-size: 13px; fill: #333; }
+    .sublabel { font-size: 10px; fill: #666; }
+    .icon { fill: none; stroke: #888; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .icon-fill { fill: #888; stroke: none; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#888"/>
+    </marker>
+  </defs>
+
+  <!-- Cloud: Public Internet -->
+  <g transform="translate(60, 70)">
+    <path class="icon" stroke-width="2" d="M-30,10 A20,20 0 0,1 -10,-10 A15,15 0 0,1 15,-12 A18,18 0 0,1 32,0 A12,12 0 0,1 30,18 L-24,18 A14,14 0 0,1 -30,10Z"/>
+    <text x="0" y="42" text-anchor="middle" class="label">Public Internet</text>
+    <text x="0" y="56" text-anchor="middle" class="sublabel">city docs, feeds, data</text>
+  </g>
+
+  <!-- Arrow: cloud → extract -->
+  <path class="arrow" d="M120,78 L195,78"/>
+
+  <!-- Extract -->
+  <rect class="box extract" x="200" y="48" width="130" height="60"/>
+  <text x="265" y="73" text-anchor="middle" class="label">Extract</text>
+  <text x="265" y="89" text-anchor="middle" class="sublabel">download + record</text>
+
+  <!-- Arrow: extract → transform -->
+  <path class="arrow" d="M335,78 L365,78"/>
+
+  <!-- Transform -->
+  <rect class="box transform" x="370" y="48" width="130" height="60"/>
+  <text x="435" y="73" text-anchor="middle" class="label">Transform</text>
+  <text x="435" y="89" text-anchor="middle" class="sublabel">parse, cite, summarize</text>
+
+  <!-- Arrow: transform → load -->
+  <path class="arrow" d="M505,78 L535,78"/>
+
+  <!-- Load -->
+  <rect class="box load" x="540" y="48" width="130" height="60"/>
+  <text x="605" y="73" text-anchor="middle" class="label">Load</text>
+  <text x="605" y="89" text-anchor="middle" class="sublabel">store + serve</text>
+
+  <!-- Arrow: load → user -->
+  <path class="arrow" d="M675,78 L705,78"/>
+
+  <!-- User: person icon -->
+  <g transform="translate(730, 60)">
+    <circle cx="0" cy="0" r="10" class="icon"/>
+    <path class="icon" d="M0,10 L0,28 M-12,18 L12,18 M-8,40 L0,28 L8,40"/>
+    <text x="0" y="68" text-anchor="middle" class="label">You</text>
+  </g>
+</svg>

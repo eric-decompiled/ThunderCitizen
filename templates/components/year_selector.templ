@@ -1,0 +1,284 @@
+package components
+
+import "fmt"
+
+// YearSelectorProps defines properties for the year selector.
+type YearSelectorProps struct {
+	Years       []int             // available years (ordered)
+	Current     int               // currently selected year
+	BaseURL     string            // e.g. "/budget" (server-side mode)
+	ParamName   string            // query param name, defaults to "year" (server-side mode)
+	Labels      map[int]string    // optional display labels (e.g. 2022 → "2022–2026")
+	AriaLabel   string            // optional aria-label override
+	TargetID    string            // if set, switches [data-term] panels client-side (no navigation)
+	HTMXTarget  string            // if set, HTMX partial swap mode (e.g. "#councillor-content")
+}
+
+// YearSelector renders a card with year/term navigation.
+// Server-side mode (TargetID empty): renders <a> links that navigate via query params.
+// Client-side mode (TargetID set): renders buttons that toggle [data-term] panels in #TargetID.
+templ YearSelector(props YearSelectorProps) {
+	if len(props.Years) >= 2 {
+		<div class="year-selector-card" id="year-selector" data-current={ fmt.Sprintf("%d", props.Current) } data-window-size={ windowSize(len(props.Years)) }>
+			if props.TargetID != "" {
+				<div class="year-selector" role="tablist" aria-label={ selectorAriaLabel(props.AriaLabel) }>
+					@yearSelectorInner(props)
+				</div>
+			} else {
+				<nav class="year-selector" aria-label={ selectorAriaLabel(props.AriaLabel) }>
+					@yearSelectorInner(props)
+				</nav>
+			}
+		</div>
+		if props.HTMXTarget != "" {
+			@htmxSelectorScript()
+		} else if props.TargetID != "" {
+			@clientSideSelectorScript(props.TargetID)
+		} else {
+			@serverSideSelectorScript()
+		}
+	}
+}
+
+templ yearSelectorInner(props YearSelectorProps) {
+	<button type="button" class="year-nav-arrow" id="year-nav-prev" aria-label="Earlier years">
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+	</button>
+	<div class="year-selector-window">
+		if props.HTMXTarget != "" {
+			for _, y := range props.Years {
+				if y == props.Current {
+					<a
+						href={ templ.SafeURL(fmt.Sprintf("%s?%s=%d", props.BaseURL, paramName(props.ParamName), y)) }
+						data-value={ fmt.Sprintf("%d", y) }
+						class="year-selector-link active"
+						aria-current="page"
+						hx-get={ fmt.Sprintf("%s?%s=%d", props.BaseURL, paramName(props.ParamName), y) }
+						hx-target={ props.HTMXTarget }
+						hx-swap="innerHTML"
+						hx-push-url="true"
+					>{ yearLabel(y, props.Labels) }</a>
+				} else {
+					<a
+						href={ templ.SafeURL(fmt.Sprintf("%s?%s=%d", props.BaseURL, paramName(props.ParamName), y)) }
+						data-value={ fmt.Sprintf("%d", y) }
+						class="year-selector-link"
+						hx-get={ fmt.Sprintf("%s?%s=%d", props.BaseURL, paramName(props.ParamName), y) }
+						hx-target={ props.HTMXTarget }
+						hx-swap="innerHTML"
+						hx-push-url="true"
+					>{ yearLabel(y, props.Labels) }</a>
+				}
+			}
+		} else if props.TargetID != "" {
+			for _, y := range props.Years {
+				if y == props.Current {
+					<button type="button" role="tab" id={ fmt.Sprintf("tab-%d", y) } data-value={ fmt.Sprintf("%d", y) } class="year-selector-link active" aria-selected="true" tabindex="0">{ yearLabel(y, props.Labels) }</button>
+				} else {
+					<button type="button" role="tab" id={ fmt.Sprintf("tab-%d", y) } data-value={ fmt.Sprintf("%d", y) } class="year-selector-link" aria-selected="false" tabindex="-1">{ yearLabel(y, props.Labels) }</button>
+				}
+			}
+		} else {
+			for _, y := range props.Years {
+				if y == props.Current {
+					<a href={ templ.SafeURL(fmt.Sprintf("%s?%s=%d", props.BaseURL, paramName(props.ParamName), y)) } data-value={ fmt.Sprintf("%d", y) } class="year-selector-link active" aria-current="page">{ yearLabel(y, props.Labels) }</a>
+				} else {
+					<a href={ templ.SafeURL(fmt.Sprintf("%s?%s=%d", props.BaseURL, paramName(props.ParamName), y)) } data-value={ fmt.Sprintf("%d", y) } class="year-selector-link">{ yearLabel(y, props.Labels) }</a>
+				}
+			}
+		}
+	</div>
+	<button type="button" class="year-nav-arrow" id="year-nav-next" aria-label="Later years">
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+	</button>
+}
+
+templ htmxSelectorScript() {
+	@yearWindowScript()
+}
+
+templ clientSideSelectorScript(targetID string) {
+	@yearWindowScript()
+	@tabKeyboardScript(targetID)
+}
+
+templ serverSideSelectorScript() {
+	@yearWindowScript()
+}
+
+templ yearWindowScript() {
+	<script>
+	(function() {
+		var card = document.getElementById('year-selector');
+		if (!card) return;
+
+		var links = Array.from(card.querySelectorAll('.year-selector-link'));
+		var win = card.querySelector('.year-selector-window');
+		var prevBtn = document.getElementById('year-nav-prev');
+		var nextBtn = document.getElementById('year-nav-next');
+		if (!links.length || !win) return;
+
+		var isTablist = !!card.querySelector('[role="tablist"]');
+		var JUMP = 3;
+		var winSize = parseInt(card.getAttribute('data-window-size') || '5', 10);
+
+		// Constrain window to show at most winSize items
+		if (links.length > winSize) {
+			var w = 0;
+			for (var i = 0; i < winSize; i++) {
+				w += links[i].offsetWidth;
+			}
+			w += (winSize - 1) * parseFloat(getComputedStyle(win).gap || '0'); // gap
+			win.style.maxWidth = w + 'px';
+		}
+
+		function updateArrows() {
+			if (prevBtn) prevBtn.disabled = (win.scrollLeft <= 0);
+			if (nextBtn) prevBtn && (nextBtn.disabled = (win.scrollLeft + win.clientWidth >= win.scrollWidth - 1));
+		}
+
+		function jumpWidth() {
+			// Width of JUMP items including gap
+			var w = 0;
+			for (var i = 0; i < Math.min(JUMP, links.length); i++) {
+				w += links[i].offsetWidth;
+			}
+			w += (JUMP - 1) * parseFloat(getComputedStyle(win).gap || '0'); // gap
+			return w;
+		}
+
+		// Scroll active item into view on load
+		var active = card.querySelector('.year-selector-link.active');
+		if (active) {
+			active.scrollIntoView({ inline: 'center', block: 'nearest' });
+		}
+
+		updateArrows();
+		win.addEventListener('scroll', updateArrows);
+
+		if (prevBtn) prevBtn.addEventListener('click', function() {
+			win.scrollBy({ left: -jumpWidth(), behavior: 'smooth' });
+		});
+		if (nextBtn) nextBtn.addEventListener('click', function() {
+			win.scrollBy({ left: jumpWidth(), behavior: 'smooth' });
+		});
+
+		// Preserve scroll position across page loads
+		var KEY = 'yearSelectorScroll';
+		var saved = sessionStorage.getItem(KEY);
+		if (saved !== null) {
+			sessionStorage.removeItem(KEY);
+			window.scrollTo(0, parseInt(saved, 10));
+		}
+		card.addEventListener('click', function(e) {
+			var link = e.target.closest('.year-selector-link');
+			if (!link || link.classList.contains('active')) return;
+
+			// Toggle active state
+			var prev = card.querySelector('.year-selector-link.active');
+			if (prev) {
+				prev.classList.remove('active');
+				if (isTablist) {
+					prev.setAttribute('aria-selected', 'false');
+					prev.setAttribute('tabindex', '-1');
+				} else {
+					prev.removeAttribute('aria-current');
+				}
+			}
+			link.classList.add('active');
+			if (isTablist) {
+				link.setAttribute('aria-selected', 'true');
+				link.setAttribute('tabindex', '0');
+			} else {
+				link.setAttribute('aria-current', 'page');
+			}
+
+			sessionStorage.setItem(KEY, String(window.scrollY));
+		});
+	})();
+	</script>
+}
+
+templ tabKeyboardScript(targetID string) {
+	<div id="year-tab-target-id" data-target={ targetID } hidden></div>
+	<script>
+	(function() {
+		var card = document.getElementById('year-selector');
+		var targetEl = document.getElementById('year-tab-target-id');
+		if (!card || !targetEl) return;
+		var target = document.getElementById(targetEl.dataset.target);
+		var tablist = card.querySelector('[role="tablist"]');
+		if (!tablist) return;
+
+		var tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+
+		// Set up panel ARIA attributes
+		if (target) {
+			var panels = target.querySelectorAll('[data-term]');
+			for (var i = 0; i < panels.length; i++) {
+				var p = panels[i];
+				p.setAttribute('role', 'tabpanel');
+				p.setAttribute('tabindex', '0');
+				var termVal = p.getAttribute('data-term');
+				var tab = tablist.querySelector('[data-value="' + termVal + '"]');
+				if (tab && tab.id) {
+					p.setAttribute('aria-labelledby', tab.id);
+					tab.setAttribute('aria-controls', p.id || '');
+				}
+			}
+		}
+
+		// Arrow key navigation
+		tablist.addEventListener('keydown', function(e) {
+			var idx = tabs.indexOf(e.target);
+			if (idx < 0) return;
+			var next = -1;
+			if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+				next = (idx + 1) % tabs.length;
+			} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+				next = (idx - 1 + tabs.length) % tabs.length;
+			} else if (e.key === 'Home') {
+				next = 0;
+			} else if (e.key === 'End') {
+				next = tabs.length - 1;
+			}
+			if (next >= 0) {
+				e.preventDefault();
+				tabs[next].focus();
+				tabs[next].click();
+			}
+		});
+	})();
+	</script>
+}
+
+func paramName(name string) string {
+	if name == "" {
+		return "year"
+	}
+	return name
+}
+
+func yearLabel(y int, labels map[int]string) string {
+	if labels != nil {
+		if l, ok := labels[y]; ok {
+			return l
+		}
+	}
+	return fmt.Sprintf("%d", y)
+}
+
+// windowSize returns how many years to show. If 7 or fewer, show all (no arrows needed).
+func windowSize(totalYears int) string {
+	if totalYears <= 7 {
+		return fmt.Sprintf("%d", totalYears)
+	}
+	return "5"
+}
+
+func selectorAriaLabel(label string) string {
+	if label != "" {
+		return label
+	}
+	return "Select year"
+}

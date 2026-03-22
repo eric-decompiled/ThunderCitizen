@@ -1,0 +1,39 @@
+package components
+
+import "thundercitizen/internal/models"
+
+// sourceKindIcons maps source kinds to inline SVGs for brand/type recognition.
+// Icons use currentColor to inherit link text color in both themes.
+// GitHub uses the octocat mark (filled). Others use Lucide-style stroke icons.
+var sourceKindIcons = map[models.SourceKind]string{
+	// GitHub octocat mark
+	models.SourceGitHub: `<svg class="source-ref-brand" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>`,
+	// Lucide landmark — government building with columns
+	models.SourceCity: `<svg class="source-ref-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>`,
+	// Lucide newspaper
+	models.SourceTBNews: `<svg class="source-ref-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8z"/></svg>`,
+	// Lucide radio — broadcast
+	models.SourceCBC: `<svg class="source-ref-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.4"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.4"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg>`,
+	// Lucide file-text
+	models.SourcePDF: `<svg class="source-ref-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>`,
+	// Lucide play-circle
+	models.SourceMedia: `<svg class="source-ref-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>`,
+}
+
+// SourceLink renders a citation link with optional source icon and external arrow.
+// Brand icon appears on the left; arrow-up-right on the right.
+templ SourceLink(ref models.SourceRef) {
+	<a href={ templ.SafeURL(ref.URL) } target="_blank" rel="noopener" class="source-ref" data-source-kind={ string(ref.Kind()) }>
+		if icon, ok := sourceKindIcons[ref.Kind()]; ok {
+			@templ.Raw(icon)
+		}
+		{ ref.DisplayLabel() }
+		if ref.Note != "" {
+			{ ", " + ref.Note }
+		}
+		<svg class="source-ref-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+			<line x1="7" y1="17" x2="17" y2="7"></line>
+			<polyline points="7 7 17 7 17 17"></polyline>
+		</svg>
+	</a>
+}

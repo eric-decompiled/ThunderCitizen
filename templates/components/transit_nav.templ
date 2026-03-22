@@ -1,0 +1,31 @@
+package components
+
+// TransitNavProps configures the transit sub-page navigation bar.
+type TransitNavProps struct {
+	Current string // key of the active page: "map", "metrics", "routes", "method"
+}
+
+var transitNavItems = []struct {
+	Key   string
+	Href  string
+	Label string
+}{
+	{"map", "/transit", "Live"},
+	{"metrics", "/transit/metrics", "Metrics"},
+	{"routes", "/transit/routes", "Routes"},
+	{"method", "/transit/method", "Method"},
+}
+
+templ TransitNav(props TransitNavProps) {
+	<div class="year-selector-card">
+		<nav class="year-selector" aria-label="Transit view">
+			for _, item := range transitNavItems {
+				if item.Key == props.Current {
+					<a href={ templ.SafeURL(item.Href) } class="year-selector-link active" aria-current="page">{ item.Label }</a>
+				} else {
+					<a href={ templ.SafeURL(item.Href) } class="year-selector-link">{ item.Label }</a>
+				}
+			}
+		</nav>
+	</div>
+}

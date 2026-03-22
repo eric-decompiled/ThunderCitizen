@@ -1,0 +1,183 @@
+package pages
+
+import (
+	"fmt"
+	"thundercitizen/internal/assets"
+	"thundercitizen/internal/views"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ budgetExpandToggle() {
+	<div class="layer-bar-group">
+		<button type="button" class="layer-bar-btn" id="toggle-all-highlights">Expand all</button>
+	</div>
+}
+
+templ revenueFooter() {
+	<div class="term-metric-grid cols-2">
+		<span>Municipal tax levy</span>
+		<span>Grants, fees, transfers</span>
+	</div>
+}
+
+templ spendingFooter() {
+	<span>Day-to-day services from the city ledger</span>
+}
+
+templ Budget(vm views.BudgetViewModel) {
+	@templates.Layout("Budget") {
+		@components.YearSelector(components.YearSelectorProps{
+			Years:      vm.Years,
+			Current:    vm.Year,
+			BaseURL:    "/budget",
+			ParamName:  "year",
+			HTMXTarget: "#budget-content",
+		})
+		<div id="budget-content">
+			@BudgetPartial(vm)
+		</div>
+		<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+		<script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3"></script>
+		<script src={ assets.URL("/static/budget/budget-sankey.js") }></script>
+	}
+}
+
+// BudgetPartial renders the content inside #budget-content.
+// Used by HTMX on year switch and by the full page on initial load.
+templ BudgetPartial(vm views.BudgetViewModel) {
+	<h1 class="sr-only">{ fmt.Sprintf("%d Budget", vm.Year) }</h1>
+			if !vm.HasData {
+				<article class="budget-empty-state" data-section="empty">
+					<header>
+						<h2>No budget data for { fmt.Sprintf("%d", vm.Year) }</h2>
+					</header>
+					<p>The ledger has no entries for this fiscal year. The page is rendered entirely from <code>budget_ledger</code> — there is no static fallback. Apply the relevant data patch (<code>./bin/patches apply</code>) to populate it.</p>
+				</article>
+			} else {
+			<div class="budget-topline" data-section="stats">
+				@components.TermPanel(components.TermPanelProps{Title: "Revenue · " + vm.TopLine.TotalRevenue, Accent: "var(--status-ok)", Footer: revenueFooter()}) {
+					@components.TermMetricGrid(components.TermMetricGridProps{Cols: 2}) {
+						@components.TermMetric(components.TermMetricProps{Value: vm.TopLine.PropertyTax, Label: "Property Tax", Note2: vm.TopLine.TaxPct})
+						if vm.TopLine.OtherSources != "" {
+							@components.TermMetric(components.TermMetricProps{Value: vm.TopLine.OtherSources, Label: "Other Sources", Note2: vm.TopLine.OtherPct})
+						}
+					}
+				}
+				if vm.TopLine.HasSpending {
+					@components.TermPanel(components.TermPanelProps{Title: "Spending · " + vm.TopLine.TotalRevenue, Accent: "var(--status-error)", Footer: spendingFooter()}) {
+						@components.TermMetricGrid(components.TermMetricGridProps{Cols: 1}) {
+							@components.TermMetric(components.TermMetricProps{Value: vm.TopLine.Operating, Label: "Operating", Note: "operating budget only"})
+						}
+					}
+				}
+			</div>
+			<div class="budget-flow-view">
+				<article class="term-panel budget-sankey-panel">
+					<header class="term-panel-header">
+						<h2 class="term-panel-title">Operating Budget</h2>
+					</header>
+					<div class="sankey-viewport">
+						<div id="sankey-slider" class="sankey-slider">
+							<div id="sankey-chart" class="sankey-chart"></div>
+							<div id="sankey-detail-chart" class="sankey-chart"></div>
+						</div>
+					</div>
+				</article>
+				<div id="sankey-detail" class="sankey-detail"></div>
+			</div>
+			@components.TermPanel(components.TermPanelProps{Title: "Service Details", HeaderAction: budgetExpandToggle()}) {
+				<div id="service-details-list" data-section="serviceDetails">
+					for _, item := range vm.ItemsDesc {
+						<details class="service-detail-item">
+							<summary class="service-detail-header">
+								<span class="budget-swatch" aria-hidden="true" { swatchStyle(item.Color)... }>{ " " }</span>
+								<strong>{ item.Name }</strong>
+								<span class="budget-detail-dot" aria-hidden="true">&middot;</span>
+								<span class="budget-detail-amount">{ item.AmountLabel }</span>
+							</summary>
+						</details>
+					}
+				</div>
+			}
+			<article class="budget-source-footer">
+				<p class="budget-source-note">
+					Source: <a href="https://www.thunderbay.ca/en/city-hall/resources/Budget/Original-2026-Budget---Operating-Budget-Final.pdf" target="_blank" rel="noopener">City of Thunder Bay — 2026 Operating Budget</a>.
+				</p>
+			</article>
+	}
+	@templ.JSONScript("sankey-data", vm.Sankey)
+	@templ.JSONScript("service-details", vm.ServiceDetails)
+	<script>
+		if (window.renderBudgetSankey) {
+			var sd = JSON.parse(document.getElementById('sankey-data').textContent);
+			var sv = JSON.parse(document.getElementById('service-details').textContent);
+			window.renderBudgetSankey(sd, sv);
+		}
+
+		(function() {
+			var btn = document.getElementById('toggle-all-highlights');
+			var container = document.getElementById('service-details-list');
+			if (!container) return;
+
+			function getAll() {
+				return Array.prototype.slice.call(container.querySelectorAll('details.service-detail-item'));
+			}
+
+			function animateClose(d) {
+				d.classList.add('closing');
+				d.addEventListener('transitionend', function handler() {
+					d.classList.remove('closing');
+					d.open = false;
+					d.removeEventListener('transitionend', handler);
+					if (btn) updateBtn();
+				}, { once: true });
+			}
+
+			// Animated close on summary click
+			document.addEventListener('click', function(e) {
+				var summary = e.target.closest('details.service-detail-item > summary');
+				if (!summary) return;
+				var details = summary.parentElement;
+				if (!details.open) return;
+				e.preventDefault();
+				animateClose(details);
+			});
+
+			if (!btn) return;
+
+			function allOpen() {
+				var items = getAll();
+				return items.length > 0 && items.every(function(d) { return d.open; });
+			}
+
+			function updateBtn() {
+				btn.textContent = allOpen() ? 'Collapse all' : 'Expand all';
+			}
+
+			container.addEventListener('toggle', function(e) {
+				if (e.target.classList.contains('service-detail-item')) updateBtn();
+			}, true);
+
+			btn.addEventListener('click', function() {
+				var items = getAll();
+				if (allOpen()) {
+					items.forEach(function(d) { if (d.open) animateClose(d); });
+					btn.textContent = 'Expand all';
+				} else {
+					items.forEach(function(d) { d.open = true; });
+					btn.textContent = 'Collapse all';
+				}
+			});
+		})();
+	</script>
+}
+
+func swatchStyle(color string) templ.Attributes {
+	return templ.Attributes{"style": fmt.Sprintf("background: %s", color)}
+}
+
+func trendBarStyle(pct int) templ.Attributes {
+	return templ.Attributes{"style": fmt.Sprintf("width:%d%%", pct)}
+}
+

@@ -1,0 +1,84 @@
+package pages
+
+import (
+	"fmt"
+	"thundercitizen/internal/views"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ Home(vm views.HomeViewModel) {
+	@templates.Layout("Home") {
+		<div class="home">
+		<section class="home-hero">
+			<h1>{ vm.Hero.Title }</h1>
+			<p class="lead">{ vm.Hero.Lead }</p>
+			<p class="home-subtitle">{ vm.Hero.Subtitle }</p>
+			<div class="theme-picker" role="radiogroup" aria-label="Color theme">
+				<button class="theme-pick" data-theme-pick="light" aria-label="Light theme" title="Light">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+						<circle cx="12" cy="12" r="5"></circle>
+						<line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
+						<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+						<line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
+						<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+					</svg>
+				</button>
+				<button class="theme-pick" data-theme-pick="system" aria-label="System theme" title="System">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+						<rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+						<line x1="8" y1="21" x2="16" y2="21"></line>
+						<line x1="12" y1="17" x2="12" y2="21"></line>
+					</svg>
+				</button>
+				<button class="theme-pick" data-theme-pick="dark" aria-label="Dark theme" title="Dark">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+						<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+					</svg>
+				</button>
+			</div>
+		</section>
+
+		<section class="home-section">
+			<h2>Explore</h2>
+			<div class="grid cols-3">
+				for _, link := range vm.QuickLinks {
+					@components.LinkedCard(link)
+				}
+			</div>
+		</section>
+
+		<div class="home-bottom grid cols-2">
+			@components.Card(components.CardProps{Title: "Notice Board"}) {
+				<div class="notice-welcome">
+					<div class="notice-item">
+						<strong>Welcome</strong>
+						<p>Inspired by <a href="https://justthemenu.ca" target="_blank" rel="noopener">Just The Menu</a>, we want to aggregate public data so people can be informed about their community.</p>
+						<p>We&rsquo;re still getting set up. More data and features are coming soon.</p>
+						<hr/>
+					</div>
+				</div>
+			}
+
+			if len(vm.RecentMeetings) > 0 {
+				@components.Card(components.CardProps{Title: "Recent Council Activity"}) {
+					<div class="recent-meetings">
+						for _, m := range vm.RecentMeetings {
+							<div class="recent-meeting">
+								<div class="recent-meeting-header">
+									<a href={ templ.SafeURL(fmt.Sprintf("/minutes/%s", m.ID)) }>
+										<strong>{ m.Date }</strong>
+									</a>
+									<span class="recent-meeting-count">{ fmt.Sprintf("%d motions", m.Motions) }</span>
+								</div>
+								<p class="recent-meeting-summary">{ m.Summary }</p>
+							</div>
+						}
+					</div>
+					<p class="recent-meetings-more"><a href="/minutes">View all meetings &rarr;</a></p>
+				}
+			}
+		</div>
+		</div>
+	}
+}

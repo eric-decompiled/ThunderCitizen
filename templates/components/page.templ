@@ -1,0 +1,37 @@
+package components
+
+// PageHeaderProps defines properties for a page header
+type PageHeaderProps struct {
+	Title string
+	Lead  string
+}
+
+// PageHeader renders a standard page header with title and lead text
+templ PageHeader(props PageHeaderProps) {
+	<header class="page-header">
+		<h1>{ props.Title }</h1>
+		if props.Lead != "" {
+			<p class="lead">{ props.Lead }</p>
+		}
+	</header>
+}
+
+// HeroProps defines properties for a hero section
+type HeroProps struct {
+	Title    string
+	Lead     string
+	Subtitle string
+}
+
+// Hero renders a hero section with title, lead, and optional subtitle
+templ Hero(props HeroProps) {
+	<header class="hero">
+		<h1>{ props.Title }</h1>
+		if props.Lead != "" {
+			<p class="lead">{ props.Lead }</p>
+		}
+		if props.Subtitle != "" {
+			<p>{ props.Subtitle }</p>
+		}
+	</header>
+}

@@ -1,0 +1,40 @@
+# Generated files
+*_templ.go
+static/css/style.css
+
+# Binaries (bin/ is `make all`; root-level are stray `go build` outputs)
+bin/
+tmp/
+/server
+/muni
+/munisign
+/fetcher
+/summarize
+/auditbudget
+/buildshapes
+/perftest
+
+# Secrets
+secrets.conf
+.env
+
+# Tools
+.claude
+node_modules
+
+# Generated FIR budget data (regenerate with `./bin/fetcher budget`)
+static/budget/fir_*.json
+
+# Council minutes PDFs, reports, and extracted votes (regenerate with `./bin/fetcher votes`)
+static/councillors/minutes/
+static/councillors/reports/
+static/councillors/votes_*.json
+
+.playwright-cli
+/perftest
+
+# Runtime data — extracted artifacts, downloaded bundles, never code.
+data/
+
+# Database backups (./scripts/backup.sh writes here)
+backups/

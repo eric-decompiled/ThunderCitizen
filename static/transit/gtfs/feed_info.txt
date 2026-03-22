@@ -1,0 +1,2 @@
+﻿feed_publisher_name,feed_publisher_url,feed_lang,feed_version,feed_start_date,feed_end_date
+Consat Telematics AB,http://www.consat.se,en,1/20260330 11:50:33/20260331 04:00:00,20260329,20260509

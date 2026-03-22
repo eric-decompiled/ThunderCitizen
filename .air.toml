@@ -1,0 +1,31 @@
+# Air configuration for hot reload
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Commands to run before building
+  pre_cmd = ["gofmt -w ./internal ./cmd", "templ generate", "npm run css"]
+  # Build command
+  cmd = "go build -ldflags=\"-X thundercitizen/internal/handlers.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo dev) -X thundercitizen/internal/handlers.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" -o ./tmp/main ./cmd/server"
+  # Binary to run
+  bin = "./tmp/main"
+  # Watch these extensions
+  include_ext = ["go", "templ", "css"]
+  # Exclude directories
+  exclude_dir = ["tmp", "bin", "static/css", "migrations", ".git"]
+  # Exclude generated templ files
+  exclude_regex = ["_templ\\.go$"]
+  # Delay before rebuilding (ms) - increased to debounce
+  delay = 1000
+
+[log]
+  time = false
+
+[color]
+  main = "yellow"
+  watcher = "cyan"
+  build = "green"
+  runner = "magenta"
+
+[misc]
+  clean_on_exit = true

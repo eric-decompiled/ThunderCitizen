@@ -1,0 +1,62 @@
+package templates
+
+import (
+	"strings"
+
+	"thundercitizen/internal/assets"
+)
+
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en" class="no-js">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+			<title>{ title } - Thunder Citizen</title>
+			<link rel="icon" href={ assets.URL("/static/favicon.svg") } type="image/svg+xml"/>
+			<link rel="stylesheet" href={ assets.URL("/static/css/style.css") }/>
+			<script>document.documentElement.classList.remove('no-js');</script>
+			<script src={ assets.URL("/static/js/theme-colors.js") }></script>
+		</head>
+		<body>
+			<a href="#main" class="skip-link">Skip to main content</a>
+			<header class="site-header">
+				<nav aria-label="Main navigation">
+					<a href="/" class="site-title">Thunder Citizen <svg class="site-logo" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><path d="M19 2L7 16h7l-4 14L26 14h-8z" fill="currentColor" stroke-linejoin="round"/></svg></a>
+					<ul class="nav-links">
+						@navLink("/budget", "Budget", title)
+						@navLink("/councillors", "Councillors", title)
+						@navLink("/minutes", "Minutes", title)
+						@navLink("/transit", "Transit", title)
+						@navLink("/about", "About", title)
+					</ul>
+				</nav>
+			</header>
+			<main id="main">
+				<div class="container">
+					{ children... }
+				</div>
+			</main>
+			<footer class="site-footer">
+				<p><strong>Thunder Citizen</strong> · Data for the People! (of Thunder Bay)</p>
+				<p>Independent civic research.</p>
+			</footer>
+			<script src="https://unpkg.com/htmx.org@2.0.3" integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq" crossorigin="anonymous"></script>
+		</body>
+	</html>
+}
+
+templ navLink(href, label, currentTitle string) {
+	<li>
+		if isCurrentPage(label, currentTitle) {
+			<a href={ templ.SafeURL(href) } aria-current="page">{ label }</a>
+		} else {
+			<a href={ templ.SafeURL(href) }>{ label }</a>
+		}
+	</li>
+}
+
+func isCurrentPage(label, currentTitle string) bool {
+	return strings.EqualFold(label, currentTitle) ||
+		strings.Contains(strings.ToLower(currentTitle), strings.ToLower(label))
+}

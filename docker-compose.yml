@@ -1,0 +1,48 @@
+services:
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: thundercitizen
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d thundercitizen"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    # Single canonical image reference for both paths:
+    #   - `docker compose build` (or `up --build`) builds from the local
+    #     Dockerfile and tags the result as this upstream coord.
+    #   - `docker compose pull` fetches the pre-built image from GHCR
+    #     (published on every push to main by .github/workflows/build-image.yml).
+    # Whichever you ran last wins in your local image cache. Pin a specific
+    # build with TC_IMAGE_TAG=sha-<short> (defaults to `latest`).
+    image: ghcr.io/eric-decompiled/thundercitizen:${TC_IMAGE_TAG:-latest}
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/thundercitizen?sslmode=disable
+      PORT: "8080"
+      ENVIRONMENT: production
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health | grep -qx OK"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:

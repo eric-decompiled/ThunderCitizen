@@ -1,0 +1,172 @@
+package pages
+
+import (
+	"fmt"
+	"strconv"
+
+	"thundercitizen/internal/transit"
+)
+
+// PlanPartialViewModel holds the data needed to render trip plan results.
+type PlanPartialViewModel struct {
+	Plan    *transit.PlanResult
+	Summary bool
+	FromLat float64
+	FromLon float64
+	ToLat   float64
+	ToLon   float64
+}
+
+func (vm PlanPartialViewModel) gmapsURL() string {
+	return fmt.Sprintf(
+		"https://www.google.com/maps/dir/?api=1&origin=%s,%s&destination=%s,%s&travelmode=transit",
+		strconv.FormatFloat(vm.FromLat, 'f', 6, 64),
+		strconv.FormatFloat(vm.FromLon, 'f', 6, 64),
+		strconv.FormatFloat(vm.ToLat, 'f', 6, 64),
+		strconv.FormatFloat(vm.ToLon, 'f', 6, 64),
+	)
+}
+
+func firstBusDeparture(itin transit.Itinerary) string {
+	for _, leg := range itin.Legs {
+		if leg.Type != "walk" && leg.Departure != "" {
+			return leg.Departure
+		}
+	}
+	return itin.Departure
+}
+
+// transitLegs returns only non-walk legs.
+func transitLegs(itin transit.Itinerary) []transit.Leg {
+	var out []transit.Leg
+	for _, leg := range itin.Legs {
+		if leg.Type != "walk" {
+			out = append(out, leg)
+		}
+	}
+	return out
+}
+
+func routeColorCSS(leg transit.Leg) string {
+	if leg.RouteColor != "" {
+		return leg.RouteColor
+	}
+	return "var(--status-muted)"
+}
+
+func routeBadgeStyle(leg transit.Leg) templ.Attributes {
+	return templ.Attributes{"style": "background:" + routeColorCSS(leg)}
+}
+
+// PlanResults renders the trip results partial — either summary bar or full accordion.
+templ PlanResults(vm PlanPartialViewModel) {
+	if vm.Plan == nil || len(vm.Plan.Itineraries) == 0 {
+		if vm.Summary {
+			<div id="route-summary-bar" class="route-summary-bar route-summary-no-results">
+				<span class="route-summary-info">
+					<span class="trip-itin-dur">No routes found</span>
+				</span>
+				<a href={ templ.SafeURL(vm.gmapsURL()) } target="_blank" rel="noopener" class="route-summary-gmaps" title="Google Maps">
+					<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+					Maps
+				</a>
+			</div>
+		} else {
+			<div class="trip-no-results">
+				<div class="trip-no-results-icon">&#128652;</div>
+				<strong>No routes available</strong>
+				<p>Try different stops or a later departure time.</p>
+				<a href={ templ.SafeURL(vm.gmapsURL()) } target="_blank" rel="noopener" class="trip-no-results-gmaps">
+					Try Google Maps →
+				</a>
+			</div>
+		}
+	} else if vm.Summary {
+		@planSummaryBar(vm)
+	} else {
+		@planItinerary(vm.Plan.Itineraries[0], 0, true)
+		@templ.JSONScript("plan-data", vm.Plan)
+	}
+}
+
+templ routeBadges(legs []transit.Leg) {
+	<span class="trip-itin-badges">
+		for _, leg := range legs {
+			<span class="trip-itin-arrow">→</span>
+			<span class="stop-pred-route" { routeBadgeStyle(leg)... }>{ leg.RouteID }</span>
+		}
+	</span>
+}
+
+templ planSummaryBar(vm PlanPartialViewModel) {
+	{{ itin := vm.Plan.Itineraries[0] }}
+	<div id="route-summary-bar" class="route-summary-bar">
+		<span class="route-summary-info">
+			@routeBadges(transitLegs(itin))
+			<strong>{ firstBusDeparture(itin) } → { itin.Arrival }</strong>
+			<span class="trip-itin-dur">({ strconv.Itoa(itin.DurationMin) } min)</span>
+		</span>
+		<a href={ templ.SafeURL(vm.gmapsURL()) } target="_blank" rel="noopener" class="route-summary-gmaps" title="Google Maps">
+			<svg width="12" height="12" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"></path><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path></svg>
+			Maps
+		</a>
+		<button type="button" class="route-summary-focus">Focus</button>
+		<button type="button" class="route-summary-edit">Edit</button>
+		<button type="button" class="route-summary-close">Clear</button>
+	</div>
+	@templ.JSONScript("plan-data", vm.Plan)
+}
+
+templ planItinerary(itin transit.Itinerary, idx int, expanded bool) {
+	{{ dep := firstBusDeparture(itin) }}
+	{{ legs := transitLegs(itin) }}
+	<div
+		class={ "trip-itinerary",
+			templ.KV("trip-itinerary-best", idx == 0 && !itin.Cancelled),
+			templ.KV("trip-itinerary-cancelled", itin.Cancelled) }
+		data-idx={ strconv.Itoa(idx) }
+	>
+		<div class={ "trip-itin-header", templ.KV("active", expanded) }>
+			<div class="trip-itin-summary">
+				<span class="trip-itin-routes">
+					@routeBadges(transitLegs(itin))
+				</span>
+				<span class="trip-itin-times">
+					<span class="trip-itin-depart">{ dep }</span>
+					<span class="trip-itin-arr">→ { itin.Arrival }</span>
+				</span>
+				<span class="trip-itin-dur">({ strconv.Itoa(itin.DurationMin) } min)</span>
+			</div>
+			if itin.Cancelled {
+				<span class="trip-cancelled-tag">cancelled</span>
+			}
+			<svg class="trip-itin-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 6l4 4 4-4"></path></svg>
+		</div>
+		<div class={ "trip-itin-body", templ.KV("open", expanded) }>
+			<div>
+				if itin.Cancelled {
+					<div class="trip-cancelled-badge">Would save { strconv.Itoa(itin.CancelledSavedMin) } min vs available routes</div>
+				}
+				<div class="trip-legs">
+					for i, leg := range legs {
+						<div class="trip-leg trip-leg-board">
+							<div class="trip-step"><span>{ strconv.Itoa(i + 1) }</span></div>
+							<div class="trip-leg-detail">
+								<span class="stop-pred-route" { routeBadgeStyle(leg)... }>{ leg.RouteID }</span>
+								{ " " }{ leg.From.Name } → { leg.To.Name }
+								<span class="trip-leg-stops">({ strconv.Itoa(leg.NumStops) } stops)</span>
+							</div>
+						</div>
+						if leg.Hint != "" {
+							<div class="trip-leg trip-leg-hint-row">
+								<div class="trip-step"></div>
+								<div class="trip-leg-hint">{ leg.Hint }</div>
+							</div>
+						}
+					}
+				</div>
+				<button type="button" class="trip-see-route" data-itin-idx={ strconv.Itoa(idx) }>See route on map</button>
+			</div>
+		</div>
+	</div>
+}

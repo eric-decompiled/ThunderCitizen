@@ -1,0 +1,191 @@
+package pages
+
+import (
+	"fmt"
+	"math"
+	"strings"
+	"thundercitizen/internal/transit"
+	"thundercitizen/internal/transit/chunk"
+)
+
+func valOrDash(v string) string {
+	if v != "" {
+		return v
+	}
+	return "\u2014"
+}
+
+// routeRow renders a single row in the route directory table. The KPI
+// values come from transit.RouteRowKPIFromChunks, which sums the chunk
+// slice in vm.Chunks for one route across all bands and days.
+templ routeRow(rt transit.RouteMetaAPI, kpi transit.RouteRowKPI) {
+	<tr
+		class="route-table-row route-table-link"
+		data-route={ rt.RouteID }
+		data-href={ "/transit/route/" + rt.RouteID }
+		{ routeCardStyle(rt.Color)... }
+	>
+		<td class="route-table-id" { routeIdStyle(rt.Color)... }>{ rt.RouteID }</td>
+		<td class="route-table-name">{ rt.Name }</td>
+		<td class="route-table-num"><span class="route-metric-val">{ valOrDash(kpi.Trips) }</span></td>
+		<td class="route-table-num"><span class="route-metric-val">{ valOrDash(kpi.Cancel) }</span></td>
+		<td class="route-table-num"><span class="route-metric-val">{ valOrDash(kpi.CancelPct) }</span></td>
+		<td class="route-table-num"><span class="route-metric-val">{ valOrDash(kpi.EWT) }</span></td>
+		<td class="route-table-num"><span class="route-metric-val">{ valOrDash(kpi.Cv) }</span></td>
+		<td class="route-table-terminals">
+			if len(rt.Terminals) > 0 {
+				{ strings.Join(rt.Terminals, " ↔ ") }
+			}
+		</td>
+	</tr>
+}
+
+// routeTotalsRow renders the system-wide totals row at the top of the
+// route table. Reaggregates the full chunk slice (no route filter, all
+// bands) — same numbers the KPI cards on /transit/metrics show.
+templ routeTotalsRow(chunks []chunk.ChunkView) {
+	<tr class="route-table-total">
+		<td class="route-table-id"></td>
+		<td class="route-table-name">Total</td>
+		<td class="route-table-num"><span class="route-metric-val">{ totalTripsFromChunks(chunks) }</span></td>
+		<td class="route-table-num"><span class="route-metric-val">{ totalCancelledFromChunks(chunks) }</span></td>
+		<td class="route-table-num"><span class="route-metric-val">{ transit.KPIFromChunks(chunks, "cancel", "") }</span></td>
+		<td class="route-table-num"><span class="route-metric-val">{ transit.KPIFromChunks(chunks, "ewt", "") }</span></td>
+		<td class="route-table-num"><span class="route-metric-val">{ transit.KPIFromChunks(chunks, "cv", "") }</span></td>
+		<td></td>
+	</tr>
+}
+
+// totalTripsFromChunks sums the Trips field across all chunk views.
+func totalTripsFromChunks(chunks []chunk.ChunkView) string {
+	n := 0
+	for _, b := range chunks {
+		n += b.Trips
+	}
+	return fmt.Sprintf("%d", n)
+}
+
+// totalCancelledFromChunks sums the Cancelled field across all chunk views.
+func totalCancelledFromChunks(chunks []chunk.ChunkView) string {
+	n := 0
+	for _, b := range chunks {
+		n += b.Cancelled
+	}
+	return fmt.Sprintf("%d", n)
+}
+
+// dateRangeNav renders the server-driven week selector nav.
+templ dateRangeNav(dr transit.DateRange) {
+	<div class="drb-nav" data-from={ dr.From } data-to={ dr.To }>
+		if dr.PrevURL != "" {
+			<a href={ templ.SafeURL(dr.PrevURL) } class="drb-arrow drb-prev" aria-label="Previous week">&lsaquo;</a>
+		} else {
+			<span class="drb-arrow drb-prev drb-disabled" aria-disabled="true">&lsaquo;</span>
+		}
+		<span class="drb-label">{ dr.Label }</span>
+		if dr.NextURL != "" {
+			<a href={ templ.SafeURL(dr.NextURL) } class="drb-arrow drb-next" aria-label="Next week">&rsaquo;</a>
+		} else {
+			<span class="drb-arrow drb-next drb-disabled" aria-disabled="true">&rsaquo;</span>
+		}
+	</div>
+}
+
+func routeCardStyle(color string) templ.Attributes {
+	return templ.Attributes{"style": "--route-color: " + color}
+}
+
+func routeIdStyle(color string) templ.Attributes {
+	return templ.Attributes{"style": "color: " + color}
+}
+
+func cancelLeadClass(leadMin int) string {
+	if leadMin <= 0 {
+		return "cancel-lead-none"
+	}
+	if leadMin <= 15 {
+		return "cancel-lead-bad"
+	}
+	return "cancel-lead-ok"
+}
+
+func upcomingCancelledTrips(incidents []transit.CancelIncident) int {
+	n := 0
+	for _, inc := range incidents {
+		for _, t := range inc.Trips {
+			if t.Upcoming {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func pastCancelledTrips(incidents []transit.CancelIncident) int {
+	n := 0
+	for _, inc := range incidents {
+		for _, t := range inc.Trips {
+			if !t.Upcoming {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func cancellationCount(trips map[string][]transit.CancelledTrip) string {
+	n := 0
+	for _, t := range trips {
+		n += len(t)
+	}
+	return fmt.Sprintf("%d", n)
+}
+
+func upcomingCancellationCount(trips map[string][]transit.CancelledTrip) int {
+	n := 0
+	for _, tt := range trips {
+		for _, t := range tt {
+			if t.Upcoming {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func pastCancellationCount(trips map[string][]transit.CancelledTrip) int {
+	n := 0
+	for _, tt := range trips {
+		for _, t := range tt {
+			if !t.Upcoming {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func routeColorAttr(color string) templ.Attributes {
+	return templ.Attributes{"style": "color:" + color}
+}
+
+func routeBarAttr(pct int, color string) templ.Attributes {
+	return templ.Attributes{"style": fmt.Sprintf("width:%d%%;background:%s", pct, color)}
+}
+
+func ewtBarAttr(pct int, color string) templ.Attributes {
+	return templ.Attributes{"style": fmt.Sprintf("width:%d%%;background:%s", pct, color)}
+}
+
+func fmtDelay(seconds float64) string {
+	abs := math.Abs(seconds)
+	if abs < 60 {
+		return fmt.Sprintf("%.0fs", abs)
+	}
+	min := int(abs) / 60
+	sec := int(abs) % 60
+	if sec == 0 {
+		return fmt.Sprintf("%dm", min)
+	}
+	return fmt.Sprintf("%dm %ds", min, sec)
+}

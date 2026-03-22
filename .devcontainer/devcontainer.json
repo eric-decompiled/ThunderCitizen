@@ -1,0 +1,29 @@
+{
+  "name": "ThunderCitizen",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/ThunderCitizen",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    }
+  },
+  "forwardPorts": [8080, 5432],
+  "containerEnv": {
+    "DATABASE_URL": "postgres://postgres:postgres@db:5432/thundercitizen?sslmode=disable",
+    "PORT": "8080",
+    "ENVIRONMENT": "development"
+  },
+  "postCreateCommand": "make deps && npm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "a-h.templ",
+        "syler.sass-indented",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg"
+      ]
+    }
+  }
+}

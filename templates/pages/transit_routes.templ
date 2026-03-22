@@ -1,0 +1,113 @@
+package pages
+
+import (
+	"thundercitizen/internal/assets"
+	"thundercitizen/internal/transit"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ TransitRoutes(vm transit.RoutesViewModel) {
+	@templates.Layout("Transit — Routes") {
+		@components.TransitNav(components.TransitNavProps{Current: "routes"})
+
+		<section class="metrics-panel" aria-label="Route directory">
+			<div class="metrics-panel-header">
+				<span class="terminal-map-title">Routes</span>
+				@dateRangeNav(vm.Range)
+			</div>
+			<table class="route-table" id="route-directory">
+				<thead>
+					<tr>
+						<th class="route-table-id route-table-sort" data-col="0" data-type="nat">#</th>
+						<th class="route-table-sort" data-col="1" data-type="str">Route</th>
+						<th class="route-table-num route-table-sort" data-col="2" data-type="num">Trips</th>
+						<th class="route-table-num route-table-sort" data-col="3" data-type="num">Cancels</th>
+						<th class="route-table-num route-table-sort" data-col="4" data-type="num">Cancel %</th>
+						<th class="route-table-num route-table-sort" data-col="5" data-type="num">EWT</th>
+						<th class="route-table-num route-table-sort" data-col="6" data-type="num">Cv</th>
+						<th>Terminals</th>
+					</tr>
+				</thead>
+				<tbody>
+					if len(vm.Chunks) > 0 {
+						@routeTotalsRow(vm.Chunks)
+					}
+					for _, rt := range vm.RouteMeta {
+						@routeRow(rt, transit.RouteRowKPIFromChunks(vm.Chunks, rt.RouteID))
+					}
+				</tbody>
+			</table>
+		</section>
+		@templ.JSONScript("transit-chunks", vm.Chunks)
+		<script src={ assets.URL("/static/transit/chunks.js") }></script>
+		<script>
+		(function(){
+			var table = document.getElementById('route-directory');
+			if (!table) return;
+			var tbody = table.querySelector('tbody');
+			var heads = table.querySelectorAll('.route-table-sort');
+			var sortCol = 0, sortAsc = true;
+
+			function natKey(s) {
+				var m = s.match(/^(\d+)(.*)/);
+				if (!m) return [0, s];
+				return [parseInt(m[1]), m[2]];
+			}
+
+			function doSort() {
+				var type = heads[0].getAttribute('data-type');
+				for (var j = 0; j < heads.length; j++) {
+					if (parseInt(heads[j].getAttribute('data-col')) === sortCol) {
+						type = heads[j].getAttribute('data-type');
+						heads[j].classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
+					} else {
+						heads[j].classList.remove('sort-asc', 'sort-desc');
+					}
+				}
+				var dataRows = Array.prototype.slice.call(tbody.querySelectorAll('.route-table-row'));
+				dataRows.sort(function(a, b) {
+					var av = a.cells[sortCol].textContent.trim();
+					var bv = b.cells[sortCol].textContent.trim();
+					if (type === 'nat') {
+						var ak = natKey(av), bk = natKey(bv);
+						var d = ak[0] - bk[0];
+						if (d !== 0) return sortAsc ? d : -d;
+						var s = ak[1].localeCompare(bk[1]);
+						return sortAsc ? s : -s;
+					}
+					if (type === 'num') {
+						av = parseFloat(av.replace(/[^0-9.\-]/g, '')) || 0;
+						bv = parseFloat(bv.replace(/[^0-9.\-]/g, '')) || 0;
+						return sortAsc ? av - bv : bv - av;
+					}
+					return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+				});
+				for (var r = 0; r < dataRows.length; r++) {
+					tbody.appendChild(dataRows[r]);
+				}
+			}
+
+			for (var i = 0; i < heads.length; i++) {
+				heads[i].addEventListener('click', (function(th) {
+					return function() {
+						var col = parseInt(th.getAttribute('data-col'));
+						if (sortCol === col) { sortAsc = !sortAsc; }
+						else { sortCol = col; sortAsc = (th.getAttribute('data-type') !== 'num'); }
+						doSort();
+					};
+				})(heads[i]));
+			}
+
+			// Click row → navigate to dedicated route page
+			tbody.addEventListener('click', function(e) {
+				var row = e.target.closest('.route-table-link');
+				if (!row) return;
+				window.location.href = row.getAttribute('data-href');
+			});
+
+			doSort();
+		})();
+		</script>
+	}
+}

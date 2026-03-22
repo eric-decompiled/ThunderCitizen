@@ -1,0 +1,213 @@
+# Production docker-compose for ThunderCitizen.
+#
+# Stack:
+#   init  → one-shot. Generates ./secrets/postgres_password if missing.
+#   db    → postgis/postgis, no host port. Reads password via POSTGRES_PASSWORD_FILE.
+#   app   → published GHCR image, no host port. Builds DATABASE_URL from the
+#           secret file at startup via a tiny entrypoint wrapper.
+#   caddy → terminates TLS (auto-issues + auto-renews via Let's Encrypt),
+#           proxies HTTPS to the app on the internal compose network.
+#
+# Secrets:
+#   The Postgres password is GENERATED on first boot by the `init` service
+#   (64 hex chars from /dev/urandom) and stashed at ./secrets/postgres_password
+#   on the host. Both `db` and `app` mount that directory read-only at
+#   /run/secrets and read the file directly. To rotate the password, stop
+#   the stack, delete the file (and the postgres data volume if you also want
+#   to reset the DB), and bring the stack back up.
+#
+# Differences from docker-compose.yml (local dev):
+#   - Pulls the published image from GHCR instead of building locally
+#   - Postgres has NO published ports (only reachable inside the compose network)
+#   - App has NO published ports (only reachable via caddy)
+#   - Caddy publishes 80/443 and handles TLS automatically — no Caddyfile in
+#     the repo, the config is inlined below
+#   - Every env var has a sensible default — the stack can come up with an
+#     empty .env (just override what you actually need)
+#   - restart: unless-stopped on every long-running service
+#
+# Prerequisites for TLS to work:
+#   - DNS A/AAAA records for every hostname in the Caddyfile below point at
+#     this host. Currently:
+#       thundercitizen.ca, www.thundercitizen.ca    (canonical site)
+#       thundercitizen.com, www.thundercitizen.com  (302 → thundercitizen.ca)
+#   - Ports 80 and 443 are open (Let's Encrypt's HTTP-01 challenge needs 80)
+#
+# If any hostname's DNS isn't live yet, Caddy will fail to issue that SAN's
+# cert but the other site block still works. Log lines like "obtain: acme:
+# Could not reach host" indicate the problem hostname; remove it from the
+# Caddyfile temporarily or wait for DNS to propagate.
+#
+# Usage:
+#   1. (Optional) Copy this block into a `.env` file beside this compose file
+#      and override any defaults you don't like — none of these are required:
+#
+#        ACME_EMAIL=eric@decompiled.dev       # default if unset
+#        POSTGRES_USER=thundercitizen         # default if unset
+#        POSTGRES_DB=thundercitizen           # default if unset
+#        # Pin to a specific build for reproducibility. `latest` and `main`
+#        # move with each push to main; `sha-<short>` is immutable.
+#        TC_IMAGE_TAG=sha-3d84894             # default: latest
+#
+#   The canonical domain is hardcoded in the Caddyfile content below (not
+#   an env var) because changing it requires also updating the redirect
+#   block's target — a mistake better caught by editing the file than by
+#   setting a shell variable wrong.
+#
+#   2. Bring it up:
+#
+#        docker compose -f docker-compose.prod.yml --env-file .env up -d
+#
+#      First boot: `init` generates ./secrets/postgres_password, db comes up
+#      with that password, app reads the same file to build DATABASE_URL,
+#      caddy gets a Let's Encrypt cert. Watch it happen:
+#
+#        docker compose -f docker-compose.prod.yml logs -f
+#
+#   3. Apply data patches once after first boot (they are intentionally NOT
+#      in the image — see the Dockerfile header). Easiest path:
+#
+#        for f in patches/*.sql; do
+#          docker compose -f docker-compose.prod.yml exec -T db \
+#            psql -U thundercitizen -d thundercitizen < "$f"
+#        done
+#
+#      (This bypasses the patches CLI's tracking table — fine for first apply.)
+
+# Distinct project name so prod containers, networks, and volumes never
+# collide with the dev stack (`docker-compose.yml`, project `thundercitizen`).
+# Containers become `thundercitizen-prod-db-1`, etc.
+name: thundercitizen-prod
+
+configs:
+  caddyfile:
+    # Compose interpolates ${VAR} at parse time, baking the values into the
+    # config object. Re-run `docker compose up -d --force-recreate caddy`
+    # to pick up changes (a plain `restart` won't see them — the config
+    # is baked into the container at create time, not read from disk).
+    content: |
+      {
+          email ${ACME_EMAIL:-eric@decompiled.dev}
+      }
+
+      # Canonical site — thundercitizen.ca and its www alias share one cert
+      # (Let's Encrypt issues a single cert with both as SANs).
+      thundercitizen.ca, www.thundercitizen.ca {
+          encode zstd gzip
+          reverse_proxy app:8080
+      }
+
+      # Legacy / alias hostnames — 302 Temporary Redirect to the canonical
+      # .ca URL, preserving path and query string via {uri}. Using temporary
+      # instead of permanent on purpose: browsers aggressively cache 301s
+      # (forever, often without honoring TTL), and while .ca is still
+      # settling we want to be able to roll this back without users being
+      # stuck on a cached redirect. Switch to `permanent` once confident.
+      thundercitizen.com, www.thundercitizen.com {
+          redir https://thundercitizen.ca{uri} temporary
+      }
+
+services:
+  init:
+    # Generates ./secrets/postgres_password on first boot. Idempotent — on
+    # subsequent ups it sees the existing file and exits 0 immediately.
+    image: alpine:3
+    restart: "no"
+    volumes:
+      - ./secrets:/secrets
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        if [ ! -s /secrets/postgres_password ]; then
+          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /secrets/postgres_password
+          chmod 644 /secrets/postgres_password
+          echo "[init] generated ./secrets/postgres_password (64 hex chars)"
+        else
+          echo "[init] ./secrets/postgres_password already present, skipping"
+        fi
+
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-thundercitizen}
+      POSTGRES_DB: ${POSTGRES_DB:-thundercitizen}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./secrets:/run/secrets:ro
+      - ./backups:/backups        # bind mount for ./scripts/backup.sh
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-thundercitizen} -d ${POSTGRES_DB:-thundercitizen}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # No `ports:` — Postgres is only reachable from other services on the
+    # default compose network (i.e. the `app` container, as host `db`).
+
+  app:
+    image: ghcr.io/eric-decompiled/thundercitizen:${TC_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-thundercitizen}
+      POSTGRES_DB: ${POSTGRES_DB:-thundercitizen}
+      PORT: "8080"
+      ENVIRONMENT: production
+    volumes:
+      - ./secrets:/run/secrets:ro
+    # The published image's ENTRYPOINT is /usr/local/bin/server. Override it
+    # with a tiny shell wrapper that reads the password from the secret file
+    # and builds DATABASE_URL at startup, then execs the server.
+    # $$ is compose's escape for a literal $ — the shell sees $POSTGRES_USER
+    # and reads it from the container's env at runtime.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        DB_PASS=$$(cat /run/secrets/postgres_password)
+        export DATABASE_URL="postgres://$$POSTGRES_USER:$$DB_PASS@db:5432/$$POSTGRES_DB?sslmode=disable"
+        exec /usr/local/bin/server
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+    healthcheck:
+      # wget --spider issues a HEAD which the route didn't accept (405) — use
+      # GET and verify the body says "OK" so a drifted endpoint doesn't pass.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health | grep -qx OK"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # No `ports:` — caddy reaches the app as `app:8080` on the compose network.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - caddy_data:/data       # cert storage — MUST persist or you'll hit LE rate limits
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  # No explicit `name:` — compose auto-prefixes with the project name
+  # `thundercitizen-prod`, yielding `thundercitizen-prod_postgres_data`, etc.
+  postgres_data:
+  caddy_data:
+  caddy_config:

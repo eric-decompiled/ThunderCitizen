@@ -1,0 +1,40 @@
+package components
+
+import "strconv"
+
+// StatItem represents a single statistic
+type StatItem struct {
+	Label   string
+	Value   string
+	Note    string // visible below the stat
+	Tooltip string // shown on hover
+}
+
+// StatGridProps defines properties for a statistics grid
+type StatGridProps struct {
+	Items   []StatItem
+	Columns int // 3 or 4
+}
+
+// StatGrid renders a grid of statistics
+templ StatGrid(props StatGridProps) {
+	<div class={ "stat-grid", colsClass(props.Columns) }>
+		for _, item := range props.Items {
+			<div class="stat-item">
+				<p class="stat-value">{ item.Value }</p>
+				if item.Tooltip != "" {
+					<p class="stat-label" title={ item.Tooltip }>{ item.Label } <abbr aria-label={ item.Tooltip }>&#9432;</abbr></p>
+				} else {
+					<p class="stat-label">{ item.Label }</p>
+				}
+				if item.Note != "" {
+					<p class="stat-note">{ item.Note }</p>
+				}
+			</div>
+		}
+	</div>
+}
+
+func colsClass(columns int) string {
+	return "cols-" + strconv.Itoa(columns)
+}

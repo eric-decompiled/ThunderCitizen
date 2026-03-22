@@ -1,0 +1,105 @@
+package components
+
+import "strconv"
+import "fmt"
+
+// TermMetricProps defines a single terminal-styled metric readout.
+type TermMetricProps struct {
+	Value   string // "$251.5M", "4.0%"
+	Label   string // "PROPERTY TAX"
+	Note    string // optional secondary text
+	Note2   string // optional second line (e.g. share %)
+	Ticker  string // optional YoY change badge (e.g. "▲ +4.1%")
+	TickerUp bool  // true = green, false = red
+	Tooltip string // hover text
+	Color   string // optional CSS color for the value
+}
+
+// TermMetric renders a big monospace number + label + optional notes.
+templ TermMetric(props TermMetricProps) {
+	<div class="term-metric">
+		<p class="term-metric-value" { metricValueAttrs(props.Color)... }>{ props.Value }</p>
+		<p class="term-metric-label" title={ props.Tooltip }>{ props.Label }</p>
+		if props.Note != "" {
+			<p class="term-metric-note">{ props.Note }</p>
+		}
+		if props.Note2 != "" || props.Ticker != "" {
+			<p class="term-metric-note">
+				if props.Note2 != "" {
+					{ props.Note2 }
+					if props.Ticker != "" {
+						{ " " }
+					}
+				}
+				if props.Ticker != "" {
+					if props.TickerUp {
+						<span class="term-metric-ticker term-ticker-up">{ props.Ticker }</span>
+					} else {
+						<span class="term-metric-ticker term-ticker-down">{ props.Ticker }</span>
+					}
+				}
+			</p>
+		}
+	</div>
+}
+
+func metricValueAttrs(color string) templ.Attributes {
+	if color == "" {
+		return nil
+	}
+	return templ.Attributes{"style": fmt.Sprintf("color:%s", color)}
+}
+
+// TermPanelProps defines a terminal-styled card container.
+type TermPanelProps struct {
+	Title        string          // uppercase header label
+	Accent       string          // CSS color for left border accent (e.g. "var(--status-ok)")
+	ID           string          // optional ID for HTMX targeting
+	HeaderAction templ.Component // optional action rendered right-aligned in header
+	Footer       templ.Component // optional footer rendered as <footer> after body
+}
+
+// TermPanel renders a terminal-styled card with header and children slot.
+templ TermPanel(props TermPanelProps) {
+	<article class="term-panel" { panelAttrs(props)... }>
+		if props.Title != "" {
+			<header class="term-panel-header">
+				<h3 class="term-panel-title">{ props.Title }</h3>
+				if props.HeaderAction != nil {
+					@props.HeaderAction
+				}
+			</header>
+		}
+		<div class="term-panel-body">
+			{ children... }
+		</div>
+		if props.Footer != nil {
+			<footer class="term-panel-footer">
+				@props.Footer
+			</footer>
+		}
+	</article>
+}
+
+func panelAttrs(props TermPanelProps) templ.Attributes {
+	attrs := templ.Attributes{}
+	if props.ID != "" {
+		attrs["id"] = props.ID
+	}
+	if props.Accent != "" {
+		attrs["style"] = fmt.Sprintf("border-left: 2px solid %s", props.Accent)
+	}
+	return attrs
+}
+
+// TermMetricGridProps defines a responsive grid for metrics.
+type TermMetricGridProps struct {
+	Cols int // 2, 3, or 4
+}
+
+// TermMetricGrid renders a responsive grid container for TermMetric components.
+templ TermMetricGrid(props TermMetricGridProps) {
+	<div class={ "term-metric-grid", "cols-" + strconv.Itoa(props.Cols) }>
+		{ children... }
+	</div>
+}

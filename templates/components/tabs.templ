@@ -1,0 +1,125 @@
+package components
+
+// Tab defines a single tab in a tab selector.
+type Tab struct {
+	Key   string // unique key for data-panel matching
+	Label string // display label
+}
+
+// TabSelectorProps defines properties for the tab selector.
+type TabSelectorProps struct {
+	Tabs      []Tab
+	Current   string // key of the initially active tab
+	TargetID  string // container ID with [data-panel] children
+	AriaLabel string
+}
+
+templ TabSelector(props TabSelectorProps) {
+	<div class="year-selector-card" id="tab-selector" data-current={ props.Current }>
+		<div class="year-selector" role="tablist" aria-label={ tabAriaLabel(props.AriaLabel) }>
+			for _, t := range props.Tabs {
+				if t.Key == props.Current {
+					<button type="button" role="tab" id={ "tab-" + t.Key } data-value={ t.Key } class="year-selector-link active" aria-selected="true" tabindex="0" aria-controls={ "panel-" + t.Key }>{ t.Label }</button>
+				} else {
+					<button type="button" role="tab" id={ "tab-" + t.Key } data-value={ t.Key } class="year-selector-link" aria-selected="false" tabindex="-1" aria-controls={ "panel-" + t.Key }>{ t.Label }</button>
+				}
+			}
+		</div>
+	</div>
+	@tabSwitchScript(props.TargetID)
+}
+
+templ tabSwitchScript(targetID string) {
+	<div id="tab-target-id" data-target={ targetID } hidden></div>
+	<script>
+	(function() {
+		function initTabs() {
+		var card = document.getElementById('tab-selector');
+		var targetEl = document.getElementById('tab-target-id');
+		if (!card || !targetEl) return;
+		var target = document.getElementById(targetEl.dataset.target);
+		if (!target) return;
+
+		var tablist = card.querySelector('[role="tablist"]');
+		var tabs = tablist ? Array.from(tablist.querySelectorAll('[role="tab"]')) : [];
+
+		// Set up panel ARIA attributes
+		var panels = target.querySelectorAll('[data-panel]');
+		for (var i = 0; i < panels.length; i++) {
+			var p = panels[i];
+			p.setAttribute('role', 'tabpanel');
+			p.setAttribute('tabindex', '0');
+			var panelKey = p.getAttribute('data-panel');
+			if (panelKey && !p.id) p.id = 'panel-' + panelKey;
+			var tab = tablist ? tablist.querySelector('[data-value="' + panelKey + '"]') : null;
+			if (tab && p.id) {
+				p.setAttribute('aria-labelledby', tab.id);
+			}
+		}
+
+		function showPanel(key) {
+			for (var i = 0; i < panels.length; i++) {
+				panels[i].hidden = panels[i].getAttribute('data-panel') !== key;
+			}
+		}
+
+		// Show initial panel
+		showPanel(card.getAttribute('data-current'));
+
+		card.addEventListener('click', function(e) {
+			var btn = e.target.closest('[role="tab"]');
+			if (!btn || btn.classList.contains('active')) return;
+
+			var prev = card.querySelector('[role="tab"].active');
+			if (prev) {
+				prev.classList.remove('active');
+				prev.setAttribute('aria-selected', 'false');
+				prev.setAttribute('tabindex', '-1');
+			}
+			btn.classList.add('active');
+			btn.setAttribute('aria-selected', 'true');
+			btn.setAttribute('tabindex', '0');
+
+			var key = btn.getAttribute('data-value');
+			card.setAttribute('data-current', key);
+			showPanel(key);
+		});
+
+		// Arrow key navigation
+		if (tablist) {
+			tablist.addEventListener('keydown', function(e) {
+				var idx = tabs.indexOf(e.target);
+				if (idx < 0) return;
+				var next = -1;
+				if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+					next = (idx + 1) % tabs.length;
+				} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+					next = (idx - 1 + tabs.length) % tabs.length;
+				} else if (e.key === 'Home') {
+					next = 0;
+				} else if (e.key === 'End') {
+					next = tabs.length - 1;
+				}
+				if (next >= 0) {
+					e.preventDefault();
+					tabs[next].focus();
+					tabs[next].click();
+				}
+			});
+		}
+		}
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', initTabs);
+		} else {
+			initTabs();
+		}
+	})();
+	</script>
+}
+
+func tabAriaLabel(label string) string {
+	if label != "" {
+		return label
+	}
+	return "Select view"
+}

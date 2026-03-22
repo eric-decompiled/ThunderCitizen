@@ -1,0 +1,293 @@
+package pages
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"thundercitizen/internal/transit"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ AuditIndex(vm transit.AuditIndexViewModel) {
+	@templates.Layout("Transit — Delta Audit") {
+		@components.TransitNav(components.TransitNavProps{Current: "routes"})
+		<section class="metrics-panel" aria-label="Delta audit — route chooser">
+			<div class="metrics-panel-header">
+				<span class="terminal-map-title">Delta Audit</span>
+			</div>
+			<p class="audit-legend">
+				Compares two independent delay signals per timepoint, side by side on each cell.
+				<strong>obs</strong> = TripUpdate feed (last value before the stop dropped from predictions).
+				<strong>gps</strong> = vehicle-position stop-visit interpolation, computed from the GPS trail.
+				Cells where the two signals disagree by more than { strconv.Itoa(transit.DivergenceToleranceSec) } seconds are highlighted.
+			</p>
+			<form method="get" class="audit-date-form">
+				<label for="audit-date">Date</label>
+				<input type="date" id="audit-date" name="date" value={ vm.DateISO }/>
+				<button type="submit">Load</button>
+			</form>
+			<ul class="audit-route-list">
+				for _, r := range vm.Routes {
+					<li>
+						<a href={ templ.SafeURL("/transit/audit/deltas/" + r.RouteID + "?date=" + vm.DateISO) }>
+							<span class="audit-route-id">{ r.RouteID }</span>
+							<span class="audit-route-name">{ r.Name }</span>
+						</a>
+					</li>
+				}
+			</ul>
+		</section>
+	}
+}
+
+templ AuditRoute(vm transit.AuditRouteViewModel) {
+	@templates.Layout(fmt.Sprintf("Audit — Route %s %s", vm.ShortName, vm.LongName)) {
+		@components.TransitNav(components.TransitNavProps{Current: "routes"})
+		<p class="route-back"><a href={ templ.SafeURL("/transit/audit/deltas?date=" + vm.DateISO) }>&lsaquo; All Routes</a></p>
+		<section class="metrics-panel audit-panel" aria-label={ fmt.Sprintf("Delta audit — route %s", vm.ShortName) }>
+			<div class="metrics-panel-header audit-panel-header">
+				<div class="audit-panel-title">
+					<span class="terminal-map-title">Delta Audit — { vm.ShortName } { vm.LongName }</span>
+					<span class="audit-debug-tag">debug</span>
+				</div>
+				<div class="audit-panel-meta">
+					<span>{ vm.Date }</span>
+					<a href={ templ.SafeURL("/transit/route/" + vm.RouteID + "?date=" + vm.DateISO) }>(live route page)</a>
+				</div>
+			</div>
+			@auditMethodBlurb()
+			if vm.Schedule != nil {
+				@auditSummaryStrip(vm.Schedule.Summary)
+				@auditTimetableBody(vm.Schedule)
+			} else {
+				<p>No schedule for this route on { vm.Date }.</p>
+			}
+		</section>
+	}
+}
+
+templ auditMethodBlurb() {
+	<section class="audit-card audit-method-card">
+		<h3>Method</h3>
+		<p class="audit-method">
+			<strong>This is a debug page.</strong> <strong>Obs</strong> is the last delay value NextLift reported for a (trip, stop) in the TripUpdate prediction feed before that stop dropped out of predictions — dropping out of the prediction feed is the agency's own signal that the stop has been served. This is what the public route pages show. <strong>Gps</strong> is our independent cross-check from vehicle positions, using the midpoint of when the bus entered and exited a 50m circle at each stop. <strong>Δ</strong> is obs minus gps — cells past ±{ strconv.Itoa(transit.DivergenceToleranceSec) }s are highlighted as divergent.
+		</p>
+	</section>
+}
+
+templ auditSummaryStrip(s transit.AuditSummary) {
+	<section class="audit-card audit-summary-card">
+		<h3>Signal Agreement</h3>
+		<dl class="audit-summary">
+			<div><dt>cells</dt><dd>{ strconv.Itoa(s.Total) }</dd></div>
+			<div><dt>both agree</dt><dd class="text-status-ok">{ strconv.Itoa(s.BothOK) }</dd></div>
+			<div><dt>divergent</dt><dd class="text-status-error">{ strconv.Itoa(s.Divergent) }</dd></div>
+			<div><dt>obs only</dt><dd class="text-status-warn">{ strconv.Itoa(s.ObsOnly) }</dd></div>
+			<div><dt>gps only</dt><dd class="text-status-warn">{ strconv.Itoa(s.GpsOnly) }</dd></div>
+			<div><dt>neither</dt><dd class="text-status-muted">{ strconv.Itoa(s.Neither) }</dd></div>
+			<div><dt>agreement</dt><dd>{ auditAgreementPct(s) }</dd></div>
+		</dl>
+	</section>
+}
+
+templ auditTimetableBody(sched *transit.AuditSchedule) {
+	if sched == nil || len(sched.Trips) == 0 {
+		<p>No trips in the audit grid.</p>
+	} else {
+		for _, sec := range sched.Sections {
+			if sec.Headsign != "" {
+				<div class="route-tp-direction-label">{ sec.Headsign }</div>
+			}
+			<div class="route-tp-scroll">
+				<table class="route-tp-table audit-table striped" role="table">
+					<thead>
+						@auditTimetableHead(sec)
+					</thead>
+					<tbody>
+						for _, trip := range sched.Trips {
+							if auditTripHasStops(trip, sec) {
+								<tr class={ templ.KV("route-tp-canceled", trip.Canceled) }>
+									<td class="route-tp-trip-id">{ auditTripStartTime(trip, sec) }</td>
+									for _, idx := range sec.StopIdx {
+										@auditStopCells(trip.Stops[idx], trip.Canceled)
+									}
+								</tr>
+							}
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+templ auditTimetableHead(sec transit.DirectionSection) {
+	<tr>
+		<th class="route-tp-trip-col">Trip</th>
+		for _, stop := range sec.Stops {
+			<th colspan="4" class="route-tp-stop-hdr">{ truncateStopName(stop.StopName) }</th>
+		}
+	</tr>
+	<tr class="route-tp-subhdr">
+		<th></th>
+		for range sec.Stops {
+			<th>Obs</th>
+			<th>Gps</th>
+			<th>Δ</th>
+			<th>Dwell</th>
+		}
+	</tr>
+}
+
+templ auditStopCells(cell transit.AuditTimepoint, canceled bool) {
+	if cell.ScheduledTime == "" {
+		<td class="route-tp-empty"></td>
+		<td class="route-tp-empty"></td>
+		<td class="route-tp-empty"></td>
+		<td class="route-tp-empty"></td>
+	} else if canceled {
+		<td class="route-tp-canceled"></td>
+		<td class="route-tp-canceled"></td>
+		<td class="route-tp-canceled"></td>
+		<td class="route-tp-canceled"></td>
+	} else {
+		<td class={ auditValueClass(cell.ObsDelaySec, cell.Divergent) }>{ auditTimeLabel(cell.ScheduledTime, cell.ObsDelaySec) }</td>
+		<td class={ auditValueClass(cell.GpsDelaySec, cell.Divergent) }>{ auditTimeLabel(cell.ScheduledTime, cell.GpsDelaySec) }</td>
+		<td class={ auditDiffClass(cell) }>{ auditDiffCellLabel(cell) }</td>
+		<td class={ auditDwellClass(cell) }>{ auditDwellLabel(cell) }</td>
+	}
+}
+
+func auditValueClass(delaySec *int, divergent bool) string {
+	cls := "audit-val"
+	if delaySec == nil {
+		cls += " audit-val-none"
+	} else {
+		// Reuse the public route page's semantic color classes so the
+		// maintainer can scan for on-time / early / late at a glance.
+		// See tpCellClass in route.templ for the thresholds.
+		d := *delaySec
+		switch {
+		case d < -120:
+			cls += " route-tp-early"
+		case d > 360:
+			cls += " route-tp-late"
+		default:
+			cls += " route-tp-ontime"
+		}
+	}
+	if divergent {
+		cls += " audit-cell-divergent"
+	}
+	return cls
+}
+
+func auditDiffClass(cell transit.AuditTimepoint) string {
+	cls := "audit-diff"
+	if cell.ObsDelaySec == nil || cell.GpsDelaySec == nil {
+		cls += " audit-val-none"
+		return cls
+	}
+	if cell.Divergent {
+		cls += " audit-cell-divergent audit-diff-over"
+	}
+	return cls
+}
+
+func auditDiffCellLabel(cell transit.AuditTimepoint) string {
+	if cell.ObsDelaySec == nil || cell.GpsDelaySec == nil {
+		return "—"
+	}
+	return auditDiffLabel(*cell.ObsDelaySec, *cell.GpsDelaySec)
+}
+
+func auditTripHasStops(trip transit.AuditTrip, sec transit.DirectionSection) bool {
+	for _, idx := range sec.StopIdx {
+		if idx < len(trip.Stops) && trip.Stops[idx].ScheduledTime != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func auditTripStartTime(trip transit.AuditTrip, sec transit.DirectionSection) string {
+	for _, idx := range sec.StopIdx {
+		if idx < len(trip.Stops) && trip.Stops[idx].ScheduledTime != "" {
+			return trip.Stops[idx].ScheduledTime
+		}
+	}
+	return ""
+}
+
+// auditTimeLabel returns just the observed wall-clock time (scheduled +
+// delay) as "H:MM". The parenthetical "(+N)" delta has been intentionally
+// dropped — the audit view has a dedicated Δ column; repeating the
+// obs-vs-scheduled delta inside each value cell is noise.
+func auditTimeLabel(sched string, delaySec *int) string {
+	if delaySec == nil {
+		return "—"
+	}
+	parts := strings.Split(sched, ":")
+	if len(parts) != 2 {
+		return "—"
+	}
+	h, err1 := strconv.Atoi(parts[0])
+	m, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil {
+		return "—"
+	}
+	totalSec := h*3600 + m*60 + *delaySec
+	if totalSec < 0 {
+		totalSec += 86400
+	}
+	ah := (totalSec / 3600) % 24
+	am := (totalSec % 3600) / 60
+	return fmt.Sprintf("%d:%02d", ah, am)
+}
+
+// auditDiffLabel formats obs-minus-gps, in seconds when under a minute and
+// in m:ss otherwise. Positive means the TripUpdate value is later than GPS.
+func auditDiffLabel(obs, gps int) string {
+	d := obs - gps
+	abs := d
+	sign := "+"
+	if abs < 0 {
+		abs = -abs
+		sign = "−"
+	}
+	if abs < 60 {
+		return fmt.Sprintf("%s%ds", sign, abs)
+	}
+	return fmt.Sprintf("%s%d:%02d", sign, abs/60, abs%60)
+}
+
+func auditDwellClass(cell transit.AuditTimepoint) string {
+	if cell.GpsDriveBy || cell.DwellSec == nil {
+		return "audit-val-none"
+	}
+	return ""
+}
+
+func auditDwellLabel(cell transit.AuditTimepoint) string {
+	if cell.GpsDriveBy {
+		return "drive-by"
+	}
+	if cell.DwellSec == nil {
+		return "—"
+	}
+	d := *cell.DwellSec
+	if d < 60 {
+		return fmt.Sprintf("%ds", d)
+	}
+	return fmt.Sprintf("%d:%02d", d/60, d%60)
+}
+
+func auditAgreementPct(s transit.AuditSummary) string {
+	both := s.BothOK + s.Divergent
+	if both == 0 {
+		return "—"
+	}
+	pct := float64(s.BothOK) / float64(both) * 100
+	return fmt.Sprintf("%.1f%%", pct)
+}

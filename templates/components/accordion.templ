@@ -1,0 +1,116 @@
+package components
+
+// AccordionItemProps defines properties for an accordion item
+type AccordionItemProps struct {
+	ID        string
+	Title     string
+	Avatar    string // initials to display (fallback)
+	Photo     string // photo URL (preferred over Avatar)
+	Subtitle  string // e.g., position or role
+	Note      string // e.g., term info
+	NoteClass string // extra CSS class for the note badge
+	Badge      string // optional status badge
+	BadgeClass string // extra CSS class for the badge
+	WardName  string // optional: links to ward map
+}
+
+// AccordionAnimateScript installs close animations on all accordion items.
+// Include once per page that uses accordions.
+templ AccordionAnimateScript() {
+	<script>
+	(function() {
+		// Animated close for accordion items
+		document.addEventListener('click', function(e) {
+			var summary = e.target.closest('details.accordion-item > summary');
+			if (!summary) return;
+			var details = summary.parentElement;
+			if (!details.open) return;
+
+			e.preventDefault();
+			details.classList.add('accordion-closing');
+			details.addEventListener('transitionend', function handler() {
+				details.classList.remove('accordion-closing');
+				details.open = false;
+				details.removeEventListener('transitionend', handler);
+				updateToggleBtn();
+			}, { once: true });
+		});
+
+		// Open/Close all toggle
+		var toggleBtn = document.getElementById('toggle-all-councillors');
+		if (!toggleBtn) return;
+
+		function getAccordions() {
+			return Array.from(document.querySelectorAll('#councillor-content details.accordion-item'));
+		}
+
+		function allOpen() {
+			var items = getAccordions();
+			return items.length > 0 && items.every(function(d) { return d.open; });
+		}
+
+		function updateToggleBtn() {
+			toggleBtn.textContent = allOpen() ? 'Close all' : 'Open all';
+		}
+
+		// Update label when individual items are toggled
+		document.addEventListener('toggle', function(e) {
+			if (e.target.closest && e.target.closest('details.accordion-item')) updateToggleBtn();
+		}, true);
+
+		toggleBtn.addEventListener('click', function() {
+			var items = getAccordions();
+			if (allOpen()) {
+				// Close all with animation
+				items.forEach(function(d) {
+					if (!d.open) return;
+					d.classList.add('accordion-closing');
+					d.addEventListener('transitionend', function handler() {
+						d.classList.remove('accordion-closing');
+						d.open = false;
+						d.removeEventListener('transitionend', handler);
+					}, { once: true });
+				});
+				toggleBtn.textContent = 'Open all';
+			} else {
+				items.forEach(function(d) { d.open = true; });
+				toggleBtn.textContent = 'Close all';
+			}
+		});
+	})();
+	</script>
+}
+
+// AccordionItem renders a native details/summary accordion item
+templ AccordionItem(props AccordionItemProps) {
+	<details
+		class="accordion-item"
+		id={ props.ID }
+		if props.WardName != "" {
+			data-ward={ props.WardName }
+		}
+	>
+		<summary>
+			if props.Photo != "" {
+				<img class="councillor-photo" src={ props.Photo } alt={ props.Title }/>
+			} else if props.Avatar != "" {
+				@InitialsAvatar(props.Avatar)
+			}
+			if props.Note != "" {
+				<span class={ "badge", props.NoteClass }>{ props.Note }</span>
+			}
+			<strong>{ props.Title }</strong>
+			<span class="accordion-right">
+				if props.Badge != "" {
+					<span class={ "badge", "accordion-status", props.BadgeClass }>{ props.Badge }</span>
+				}
+				if props.Subtitle != "" {
+					<span class="badge accordion-subtitle">{ props.Subtitle }</span>
+				}
+			</span>
+		</summary>
+		<div class="accordion-content">
+			{ children... }
+		</div>
+	</details>
+}

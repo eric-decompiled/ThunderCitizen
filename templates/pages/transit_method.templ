@@ -1,0 +1,494 @@
+package pages
+
+import (
+	"thundercitizen/internal/transit"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ TransitMethod(vm transit.MethodViewModel) {
+	@templates.Layout("Transit — Method") {
+		@components.TransitNav(components.TransitNavProps{Current: "method"})
+		@transitMethodology()
+		@transitDataCollection(vm)
+	}
+}
+
+templ transitDataCollection(vm transit.MethodViewModel) {
+	<section aria-label="Data collection" class="report-methodology">
+		<article>
+			<header class="methods-header"><h3>Data Collection</h3></header>
+			<p>
+				Thunder Bay Transit publishes three
+				<a href="https://gtfs.org/documentation/realtime/reference/" target="_blank" rel="noopener">GTFS Realtime</a>
+				feeds &mdash; vehicle positions, trip updates, and service alerts. We poll
+				each on a fixed interval and store every response as a raw event.
+				The official feed URLs are listed on the City of Thunder Bay
+				<a href="https://www.thunderbay.ca/en/city-services/developers---open-data.aspx" target="_blank" rel="noopener">Transit Open Data</a> page.
+			</p>
+			<table>
+				<thead>
+					<tr><th>Source</th><th>Method</th><th>Frequency</th></tr>
+				</thead>
+				<tbody>
+					<tr><td>Vehicle positions</td><td>GTFS-RT feed</td><td>Every { vm.VehiclePoll }</td></tr>
+					<tr><td>Trip delays</td><td>GTFS-RT feed</td><td>Every { vm.TripPoll }</td></tr>
+					<tr><td>Service alerts</td><td>GTFS-RT feed</td><td>Every { vm.AlertPoll }</td></tr>
+				</tbody>
+			</table>
+			<p>
+				The feeds are encoded as
+				<a href="https://protobuf.dev/" target="_blank" rel="noopener">Protocol Buffers</a>
+				(protobuf) &mdash; an advanced binary serialization format developed at
+				Google. The small efficiency gain per message, multiplied by Google
+				scale, saves a significant amount of electricity.
+			</p>
+		</article>
+	</section>
+}
+
+templ transitMethodology() {
+	<section aria-label="Understanding the metrics" class="report-methodology">
+		<article>
+			<header class="methods-header"><h3>The Data</h3></header>
+			<p>
+				Thunder Bay Transit publishes
+				<a href="https://en.wikipedia.org/wiki/GTFS" target="_blank" rel="noopener">GTFS</a>
+				schedule and realtime feeds &mdash; the same standard behind Google Maps and
+				<a href="https://nextlift.ca/" target="_blank" rel="noopener">NextLift</a>.
+				Those apps show where buses are now and discard the data.
+				We store every position, delay, and cancellation as a raw event.
+			</p>
+			<p>
+				All metrics are measured at <strong>timepoint stops</strong>
+				(<code>timepoint=true</code> in GTFS) &mdash; the 3&ndash;5 schedule
+				checkpoints per direction where the timetable is enforced. This matches
+				how agencies compute performance internally.
+			</p>
+		</article>
+
+		<article>
+			<header class="methods-header"><h3>Why Metrics</h3></header>
+			<blockquote>
+				<p>
+					&ldquo;Without an explicit SLO, users often develop their own beliefs
+					about desired performance, which may be unrelated to the beliefs held
+					by the people designing and operating the service.&rdquo;
+				</p>
+				<footer>&mdash; <cite><a href="https://sre.google/sre-book/service-level-objectives/" target="_blank" rel="noopener">Google SRE Handbook</a>, Ch. 4</cite></footer>
+			</blockquote>
+			<p>
+				Google is the company who defined the GTFS transit standard
+				and are known for running complex systems with legendary reliability.
+				The SRE Handbook is very influential to how I think about building and operating
+				software systems.
+			</p>
+
+			<p>
+				The handbook calls its metrics <strong>service level indicators</strong>
+				(SLIs) &mdash; the same idea as a KPI, but focused on what the user
+				experiences rather than what the operator reports. An indicator becomes
+				a <strong>service level objective</strong> (SLO) when stakeholders
+				commit to a target: not just &ldquo;we track on-time performance&rdquo;
+				but &ldquo;we agree 75% is the floor.&rdquo;
+			</p>
+			<p>
+				Baseball stats can&rsquo;t tell you who wins tonight. Transit
+				metrics are the same &mdash; they can&rsquo;t say whether every
+				rider got where they needed to be. What they can do is show
+				whether the system is trending in the right direction over time.
+			</p>
+		</article>
+
+		<article>
+			<header class="methods-header"><h3>Six-Hour Chunks</h3><span class="methods-tag methods-tag-architecture">Architecture</span></header>
+			<p>
+				Each service day is sliced into three six-hour windows. Every
+				metric is computed per window, per route. Chunks store raw counts
+				and sums &mdash; not percentages &mdash; so rollups across routes
+				and days are exact arithmetic, not averages of averages.
+			</p>
+			<div class="chunk-stream-visual" id="chunk-stream-visual" aria-label="Six-hour chunks collecting events from the live data stream"></div>
+			<script>
+			(function() {
+				var el = document.getElementById('chunk-stream-visual');
+				if (!el) return;
+
+				var W = 600, H = 240;
+				var PAD = { left: 35, right: 25, top: 22 };
+				var tw = W - PAD.left - PAD.right;
+				function xAt(h) { return PAD.left + (h / 24) * tw; }
+
+				var streamY = 60;
+				var chunkY = 110;
+				var chunkH = 105;
+
+				// Hour labels along the top.
+				var hours = [0, 6, 12, 18, 24];
+				var hourLabels = ['12 AM', '6 AM', '12 PM', '6 PM', '12 AM'];
+
+				var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" style="max-width:' + W + 'px;width:100%">';
+
+				// Hour ticks + labels
+				for (var i = 0; i < hours.length; i++) {
+					var x = xAt(hours[i]);
+					svg += '<text x="' + x + '" y="14" text-anchor="middle" fill="var(--pico-muted-color)" style="font-size:10px;font-weight:600">' + hourLabels[i] + '</text>';
+					svg += '<line x1="' + x + '" y1="20" x2="' + x + '" y2="28" stroke="var(--pico-muted-color)" stroke-width="1"/>';
+				}
+
+				// Stream line
+				svg += '<line x1="' + xAt(0) + '" y1="' + streamY + '" x2="' + xAt(24) + '" y2="' + streamY + '" stroke="var(--accent)" stroke-width="2" opacity="0.45"/>';
+				svg += '<text x="' + (PAD.left - 6) + '" y="' + (streamY + 4) + '" text-anchor="end" fill="var(--accent)" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em">stream</text>';
+
+				// Stream events — seeded random dots so each render is identical.
+				var seed = 17;
+				function rand() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+				for (var d = 0; d < 70; d++) {
+					var hh = rand() * 24;
+					var dx = xAt(hh);
+					var dy = streamY + (rand() - 0.5) * 6;
+					svg += '<circle cx="' + dx.toFixed(1) + '" cy="' + dy.toFixed(1) + '" r="1.8" fill="var(--accent)" opacity="0.85"/>';
+				}
+
+				// Chunks — three sealed, one passthrough gap (12 AM – 6 AM, no service)
+				var chunks = [
+					{ h0: 0, h1: 6, label: 'no chunk', sub: 'no service hours', dashed: true },
+					{ h0: 6, h1: 12, label: 'Morning', sub: '6 AM – 12 PM', dashed: false },
+					{ h0: 12, h1: 18, label: 'Midday', sub: '12 PM – 6 PM', dashed: false },
+					{ h0: 18, h1: 24, label: 'Evening', sub: '6 PM – 12 AM', dashed: false }
+				];
+
+				for (var b = 0; b < chunks.length; b++) {
+					var bk = chunks[b];
+					var x0 = xAt(bk.h0) + 4;
+					var x1 = xAt(bk.h1) - 4;
+					var w = x1 - x0;
+					var stroke = bk.dashed ? 'var(--pico-muted-color)' : 'var(--accent)';
+					var dashAttr = bk.dashed ? ' stroke-dasharray="4,3"' : '';
+					var groupOpacity = bk.dashed ? '0.55' : '1';
+
+					// Connecting funnel from stream to chunk top: short vertical lines on each side
+					svg += '<line x1="' + x0 + '" y1="' + (streamY + 6) + '" x2="' + x0 + '" y2="' + chunkY + '" stroke="' + stroke + '" stroke-width="1"' + dashAttr + ' opacity="' + groupOpacity + '"/>';
+					svg += '<line x1="' + x1 + '" y1="' + (streamY + 6) + '" x2="' + x1 + '" y2="' + chunkY + '" stroke="' + stroke + '" stroke-width="1"' + dashAttr + ' opacity="' + groupOpacity + '"/>';
+
+					// Chunk rectangle
+					svg += '<rect x="' + x0 + '" y="' + chunkY + '" width="' + w + '" height="' + chunkH + '" rx="3" fill="none" stroke="' + stroke + '" stroke-width="1.5"' + dashAttr + ' opacity="' + groupOpacity + '"/>';
+
+					// Chunk bottom emphasis (the "sealed" floor)
+					if (!bk.dashed) {
+						svg += '<line x1="' + x0 + '" y1="' + (chunkY + chunkH) + '" x2="' + x1 + '" y2="' + (chunkY + chunkH) + '" stroke="' + stroke + '" stroke-width="3"/>';
+					}
+
+					// Label
+					var labelColor = bk.dashed ? 'var(--pico-muted-color)' : 'var(--accent)';
+					svg += '<text x="' + (x0 + w / 2) + '" y="' + (chunkY + 22) + '" text-anchor="middle" fill="' + labelColor + '" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em">' + bk.label + '</text>';
+					svg += '<text x="' + (x0 + w / 2) + '" y="' + (chunkY + 36) + '" text-anchor="middle" fill="var(--pico-muted-color)" style="font-size:9px">' + bk.sub + '</text>';
+
+					if (!bk.dashed) {
+						svg += '<text x="' + (x0 + w / 2) + '" y="' + (chunkY + 60) + '" text-anchor="middle" fill="var(--pico-color)" style="font-size:9px;font-weight:600">OTP · Cancel</text>';
+						svg += '<text x="' + (x0 + w / 2) + '" y="' + (chunkY + 74) + '" text-anchor="middle" fill="var(--pico-color)" style="font-size:9px;font-weight:600">Notice · Cv</text>';
+						svg += '<text x="' + (x0 + w / 2) + '" y="' + (chunkY + 92) + '" text-anchor="middle" fill="var(--pico-muted-color)" style="font-size:8px;font-style:italic">sealed at window close</text>';
+					} else {
+						// "Drain" dots passing through to nothing
+						for (var dd = 0; dd < 4; dd++) {
+							svg += '<circle cx="' + (x0 + w / 2) + '" cy="' + (chunkY + 50 + dd * 10) + '" r="1.5" fill="var(--pico-muted-color)" opacity="' + (0.6 - dd * 0.12) + '"/>';
+						}
+						svg += '<text x="' + (x0 + w / 2) + '" y="' + (chunkY + 100) + '" text-anchor="middle" fill="var(--pico-muted-color)" style="font-size:8px;font-style:italic">passthrough only</text>';
+					}
+				}
+
+				svg += '</svg>';
+				el.innerHTML = svg;
+			})();
+			</script>
+			<p>
+				Once a window closes the chunk is sealed and never changes.
+				Midnight to 6 AM has no chunk &mdash; Thunder Bay Transit
+				doesn&rsquo;t run service then. Math lives in
+				<a href="https://github.com/ericrichardson/ThunderCitizen/tree/main/internal/transit/chunk" target="_blank" rel="noopener"><code>internal/transit/chunk/</code></a>
+				with unit tests.
+			</p>
+		</article>
+
+		<article>
+			<header class="methods-header"><h3>On-Time Performance (OTP)</h3><span class="methods-tag methods-tag-schedule">Schedule</span></header>
+			<p>
+				A trip is "on time" if it arrives within <strong>1 minute early to 5
+				minutes late</strong> of schedule. This is the standard window used by
+				most North American agencies.
+			</p>
+			<p>
+				Early departures are penalized because if a bus leaves a stop before the
+				scheduled time, you miss it — that's worse than a bus running late.
+			</p>
+			<p>
+				Typical range for a mid-size Canadian city: 65–85%. Above 90% is
+				world-class. Below 60% indicates a systemic problem.
+			</p>
+		</article>
+
+
+		<article>
+			<header class="methods-header"><h3>Headway Covariance</h3><span class="methods-tag methods-tag-regularity">Regularity</span></header>
+			<p>
+				This metric measures how evenly spaced buses are along a route. If buses
+				arrived exactly on schedule, they'd be evenly spaced and this number would
+				be zero. In practice, buses bunch up or leave big gaps &mdash; the higher
+				the number, the more unpredictable your wait becomes.
+			</p>
+			<p>
+				Think of it like darts. The bullseye is the scheduled headway. Each
+				bus arrival is a throw. Low covariance means the darts cluster around
+				the bullseye &mdash; buses arrive close to when they should. High
+				covariance means darts scattered across the board &mdash; arrivals are
+				all over the place.
+			</p>
+			<div class="cv-dartboards" id="cv-dartboards" aria-label="Dartboard analogy for headway covariance"></div>
+			<script>
+			(function() {
+				var el = document.getElementById('cv-dartboards');
+				if (!el) return;
+
+				var boards = [
+					{ cv: 0.10, label: 'Cv = 0.10', quality: 'Excellent', color: '#16a34a' },
+					{ cv: 0.30, label: 'Cv = 0.30', quality: 'Fair', color: '#f97316' },
+					{ cv: 0.50, label: 'Cv = 0.50', quality: 'Poor', color: '#ef4444' }
+				];
+
+				var R = 55; // board radius
+				var bw = 150, bh = 170; // per-board viewbox
+				var cx = bw / 2, cy = 70; // center of each board
+				var totalW = bw * 3;
+
+				// Seeded random for reproducible dart positions
+				var seed = 42;
+				function rand() { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; }
+
+				// Generate dart positions with gaussian-ish distribution (Box-Muller)
+				function gaussRand() {
+					var u1 = rand(), u2 = rand();
+					return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+				}
+
+				var svg = '<svg viewBox="0 0 ' + totalW + ' ' + bh + '" role="img" style="max-width:' + totalW + 'px;width:100%">';
+
+				for (var b = 0; b < boards.length; b++) {
+					var ox = b * bw; // x offset for this board
+					var bcx = ox + cx, bcy = cy;
+
+					// Target rings
+					var rings = [1.0, 0.66, 0.33];
+					for (var r = 0; r < rings.length; r++) {
+						var rr = R * rings[r];
+						svg += '<circle cx="' + bcx + '" cy="' + bcy + '" r="' + rr + '" fill="none" stroke="var(--pico-muted-border-color)" stroke-width="1"/>';
+					}
+					// Bullseye dot
+					svg += '<circle cx="' + bcx + '" cy="' + bcy + '" r="3" fill="var(--pico-muted-color)"/>';
+
+					// Crosshairs
+					svg += '<line x1="' + (bcx - R) + '" y1="' + bcy + '" x2="' + (bcx + R) + '" y2="' + bcy + '" stroke="var(--pico-muted-border-color)" stroke-width="0.5" stroke-dasharray="2,2"/>';
+					svg += '<line x1="' + bcx + '" y1="' + (bcy - R) + '" x2="' + bcx + '" y2="' + (bcy + R) + '" stroke="var(--pico-muted-border-color)" stroke-width="0.5" stroke-dasharray="2,2"/>';
+
+					// Darts — spread proportional to cv
+					seed = 42 + b * 100; // reset per board for consistency
+					var nDarts = 20;
+					for (var d = 0; d < nDarts; d++) {
+						var dx = gaussRand() * boards[b].cv * R * 0.9;
+						var dy = gaussRand() * boards[b].cv * R * 0.9;
+						// Clamp to board
+						var dist = Math.sqrt(dx * dx + dy * dy);
+						if (dist > R - 3) { dx *= (R - 3) / dist; dy *= (R - 3) / dist; }
+						svg += '<circle cx="' + (bcx + dx).toFixed(1) + '" cy="' + (bcy + dy).toFixed(1) + '" r="3" fill="' + boards[b].color + '" opacity="0.75"/>';
+					}
+
+					// Labels
+					svg += '<text x="' + bcx + '" y="' + (bcy + R + 18) + '" text-anchor="middle" fill="' + boards[b].color + '" style="font-size:12px;font-weight:600">' + boards[b].label + '</text>';
+					svg += '<text x="' + bcx + '" y="' + (bcy + R + 32) + '" text-anchor="middle" fill="var(--pico-muted-color)" style="font-size:10px">' + boards[b].quality + '</text>';
+				}
+
+				svg += '</svg>';
+				el.innerHTML = svg;
+			})();
+			</script>
+			<p>
+				Below 0.3 is good &mdash; riders perceive the service as regular.
+				A Cv near zero isn&rsquo;t the goal either &mdash; that would be like
+				standing too close to the dartboard, where hitting the bullseye says
+				nothing about your aim. Some variance is inevitable and healthy.
+				Above 0.5, gaps feel random and riders lose trust in the system.
+			</p>
+		</article>
+
+		<article>
+			<header class="methods-header"><h3>Excess Wait Time (EWT)</h3><span class="methods-tag methods-tag-delay">Delay</span></header>
+			<p>
+				Excess Wait Time seems to be the most important operation metric. Transit managers publish a schedule
+				&mdash; that schedule is a promise. EWT measures how many extra minutes
+				you actually wait beyond that promise because buses aren&rsquo;t arriving
+				at regular intervals. It&rsquo;s the gap between what was committed to
+				and what was delivered, which is why transit agencies worldwide treat it
+				as a north-star metric
+				(<a href="https://transitcenter.org/improve-transit-smart-delays/" target="_blank" rel="noopener">TransitCenter</a>).
+			</p>
+			<p>
+				If a route runs every 15 minutes, you'd expect to wait 7.5 minutes on
+				average. But if two buses arrive together and then nothing comes for 30
+				minutes, the average headway is still 15 minutes &mdash; yet the
+				experience is far worse. EWT captures exactly this gap.
+			</p>
+			<p>
+				<strong>Why does EWT matter more than average delay?</strong> Because
+				it counts people, not just buses. A long gap doesn't just mean one
+				late bus &mdash; it means every person who showed up during that gap
+				is standing at the stop, waiting. The longer the gap, the more people
+				accumulate, and the longer each of them waits. EWT weights gaps by the
+				number of riders they actually affect, making it a social metric: it
+				measures total human time wasted, not just vehicle timing.
+			</p>
+			<p>
+				The two timelines below have the same average headway (15 min), but
+				the rider experience is very different:
+			</p>
+			<div class="ewt-visual" id="ewt-visual" aria-label="Inspection paradox: even vs bunched headways"></div>
+			<script>
+			(function() {
+				var el = document.getElementById('ewt-visual');
+				if (!el) return;
+
+				var W = 480, H = 195;
+				var PAD = { left: 10, right: 10 };
+				var tw = W - PAD.left - PAD.right; // timeline width
+				var totalMin = 60; // 1 hour timeline
+				function xAt(min) { return PAD.left + (min / totalMin) * tw; }
+
+				var scenarios = [
+					{ label: 'Even spacing', gaps: [15, 15, 15, 15], y: 25, color: '#16a34a', avgWait: '7.5' },
+					{ label: 'Bunched', gaps: [5, 5, 25, 25], y: 115, color: '#ef4444', avgWait: '11.7' }
+				];
+
+				var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" style="max-width:' + W + 'px;width:100%">';
+
+				for (var s = 0; s < scenarios.length; s++) {
+					var sc = scenarios[s];
+					var y = sc.y;
+					var gaps = sc.gaps;
+
+					// Label
+					svg += '<text x="' + PAD.left + '" y="' + (y - 8) + '" fill="var(--pico-color)" style="font-size:12px;font-weight:600">' + sc.label + '</text>';
+					svg += '<text x="' + (W - PAD.right) + '" y="' + (y - 8) + '" text-anchor="end" fill="var(--pico-muted-color)" style="font-size:10px">Avg wait: ' + sc.avgWait + ' min</text>';
+
+					// Timeline bar background
+					svg += '<rect x="' + PAD.left + '" y="' + y + '" width="' + tw + '" height="30" rx="4" fill="var(--pico-muted-border-color)" opacity="0.3"/>';
+
+					// Gap segments — shade by relative size (bigger = darker = more likely to land in)
+					var pos = 0;
+					var maxGap = Math.max.apply(null, gaps);
+					for (var g = 0; g < gaps.length; g++) {
+						var gx = xAt(pos);
+						var gw = (gaps[g] / totalMin) * tw;
+						var opacity = 0.15 + 0.55 * (gaps[g] / maxGap); // bigger gap = more opaque
+						svg += '<rect x="' + gx + '" y="' + y + '" width="' + gw + '" height="30" rx="0" fill="' + sc.color + '" opacity="' + opacity.toFixed(2) + '"/>';
+
+						// Gap duration label inside
+						var cx = gx + gw / 2;
+						svg += '<text x="' + cx + '" y="' + (y + 19) + '" text-anchor="middle" fill="var(--thunder-900)" style="font-size:11px;font-weight:600">' + gaps[g] + 'm</text>';
+
+						pos += gaps[g];
+					}
+
+					// Bus arrival markers (dots on the timeline)
+					pos = 0;
+					for (var g = 0; g <= gaps.length; g++) {
+						var bx = xAt(pos);
+						svg += '<circle cx="' + bx + '" cy="' + (y + 15) + '" r="5" fill="var(--thunder-50)" stroke="' + sc.color + '" stroke-width="2"/>';
+						if (g < gaps.length) pos += gaps[g];
+					}
+
+					// "You land here" probability annotation below
+					svg += '<text x="' + (PAD.left + tw / 2) + '" y="' + (y + 47) + '" text-anchor="middle" fill="var(--pico-muted-color)" style="font-size:10px">';
+					if (s === 0) {
+						svg += 'Equal chance of landing in any gap &mdash; each is the same size';
+					} else {
+						svg += 'You land in a 25m gap 83% of the time &mdash; the big gaps dominate the timeline';
+					}
+					svg += '</text>';
+				}
+
+				svg += '</svg>';
+				el.innerHTML = svg;
+			})();
+			</script>
+			<p>
+				The calculation squares each gap, sums those squares, and divides
+				by twice the total time. This gives the wait a random rider actually
+				experiences. Subtract the scheduled wait (half the planned headway)
+				and the remainder is the excess. Bigger gaps get disproportionate
+				weight because more riders accumulate during them &mdash; double
+				the gap, quadruple the rider-minutes lost.
+			</p>
+
+			<p>
+				Note: EWT and Cv are measuring the same thing.
+				<ul>EWT uses units relevant to transit</ul>
+				<ul>Cv uses dimensionless values</ul>
+
+				They are both measures for how accurately busses arrive compared to schedule.
+				They punish big misses much more compared to simple averages, which better relates
+				to how people will preceive the service.
+			</p>
+		</article>
+
+
+
+		<article>
+			<header class="methods-header"><h3>Route Finder (RAPTOR)</h3></header>
+			<p>
+				The route finder uses <strong>RAPTOR</strong> (Round-bAsed Public Transit
+				Optimized Router), an algorithm developed at Microsoft Research for
+				computing optimal multi-leg transit journeys. Unlike graph-based
+				approaches, RAPTOR works directly on the timetable &mdash; scanning
+				routes round by round, where each round adds one more vehicle. Round 1
+				finds all destinations reachable by a single bus, round 2 finds
+				journeys with one transfer, and so on.
+			</p>
+		</article>
+
+		<article>
+			<header><h3>References</h3></header>
+			<div class="ref-table-wrap">
+				<table class="ref-table">
+					<thead>
+						<tr>
+							<th>Source</th>
+							<th>What It Covers</th>
+							<th>Editor Note</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>
+								<a href="https://humantransit.org/2010/10/beyond-on-time-performance.html" target="_blank" rel="noopener">Human Transit: Beyond On-Time Performance</a>
+							</td>
+							<td>Why frequency and network design matter more than schedule adherence</td>
+							<td>One of many excellent posts on the <a href="https://humantransit.org" target="_blank" rel="noopener">Human Transit blog</a>. The reason we track wait time and headway regularity alongside OTP</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="https://www.microsoft.com/en-us/research/wp-content/uploads/2012/01/raptor_alenex.pdf" target="_blank" rel="noopener">Delling, Pajor, Werneck &mdash; Round-Based Public Transit Routing (PDF)</a>
+							</td>
+							<td>The RAPTOR algorithm: round-by-round timetable scanning for multi-leg trip planning</td>
+							<td>Our initial approach was graph-based; we&rsquo;re still working on understanding this paper properly</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="https://sre.google/sre-book/introduction/" target="_blank" rel="noopener">Google SRE Book: Introduction</a>
+							</td>
+							<td>Origins of the SRE discipline, error budgets, and treating operations as a software problem</td>
+							<td>The reference book tech companies use for structuring on-call rotations and reliability practices</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</article>
+	</section>
+}

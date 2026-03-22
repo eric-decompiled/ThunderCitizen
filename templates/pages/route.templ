@@ -1,0 +1,703 @@
+package pages
+
+import (
+	"fmt"
+	"math"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+	"thundercitizen/internal/assets"
+	"thundercitizen/internal/transit"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ RoutePartial(vm transit.RouteViewModel) {
+	@routeSchedule(vm)
+}
+
+templ RouteScheduleBodyPartial(vm transit.RouteViewModel) {
+	@routeScheduleBody(vm)
+}
+
+templ RouteSchedulePartial(vm transit.RouteViewModel) {
+	@routeHeader(vm.ShortName, vm.LongName, vm.Color, vm.TextColor)
+	@routeSchedule(vm)
+}
+
+templ RouteScheduleTodayPartial(vm transit.RouteViewModel) {
+	@routeHeader(vm.ShortName, vm.LongName, vm.Color, vm.TextColor)
+	<section aria-label="Schedule" class="route-schedule">
+		<div id="route-schedule-body" class="route-schedule-body">
+			@routeScheduleBody(vm)
+		</div>
+	</section>
+	<a href={ templ.SafeURL("/transit/route/" + vm.RouteID) } class="route-stats-link">Route Stats</a>
+}
+
+templ Route(vm transit.RouteViewModel) {
+	@templates.Layout(fmt.Sprintf("Route %s %s", vm.ShortName, vm.LongName)) {
+		@components.TransitNav(components.TransitNavProps{Current: "routes"})
+		<p class="route-back"><a href="/transit/routes">&lsaquo; All Routes</a></p>
+		@routeHeader(vm.ShortName, vm.LongName, vm.Color, vm.TextColor)
+		if vm.TotalTrips > 0 {
+			<div class="route-tracking-stats">
+				<span>{ fmt.Sprintf("%d trips tracked", vm.TotalTrips) }</span>
+				if vm.TrackingSince != "" {
+					<span>since { vm.TrackingSince }</span>
+				}
+			</div>
+		}
+		@routeSchedule(vm)
+		<script src={ assets.URL("/static/transit/route-detail.js") }></script>
+	}
+}
+
+templ routeSchedule(vm transit.RouteViewModel) {
+	<section aria-label="Schedule" class="route-schedule">
+		<div class="route-day-picker">
+			<a href={ templ.SafeURL("/transit/route/" + vm.RouteID + "?date=" + weekShift(vm.DateISO, -7)) } class="route-week-arrow" aria-label="Previous week">&lsaquo;</a>
+			for _, d := range weekDays(vm.DateISO) {
+				if d.IsFuture || !vm.ServiceDays[d.ISO] {
+					<span class="route-day-btn route-day-no-svc">{ d.Short }</span>
+				} else {
+					<a
+						href={ templ.SafeURL("/transit/route/" + vm.RouteID + "?date=" + d.ISO) }
+						class={ "route-day-btn", templ.KV("route-day-active", d.ISO == vm.DateISO) }
+					>
+						{ d.Short }
+						if vm.CancelDays[d.ISO] > 0 {
+							<span class="route-day-cancel-count">{ fmt.Sprintf("%d", vm.CancelDays[d.ISO]) }</span>
+						}
+					</a>
+				}
+			}
+			if !isCurrentWeek(vm.DateISO) {
+				<a href={ templ.SafeURL("/transit/route/" + vm.RouteID + "?date=" + weekShift(vm.DateISO, 7)) } class="route-week-arrow" aria-label="Next week">&rsaquo;</a>
+			} else {
+				<span class="route-week-arrow route-week-arrow-disabled">&rsaquo;</span>
+			}
+		</div>
+		if len(vm.CancelledTrips) > 0 {
+			@routeCancelList(vm.CancelledTrips)
+		}
+		<div id="route-schedule-body" class="route-schedule-body">
+			@routeScheduleBody(vm)
+		</div>
+	</section>
+}
+
+templ routeCancelList(trips []transit.CancelledTrip) {
+	<article class="route-cancel-card">
+		<header>
+			<h3>{ fmt.Sprintf("%d Cancellation%s", len(trips), pluralS(len(trips))) }</h3>
+		</header>
+		<table class="cl-table">
+			<thead>
+				<tr>
+					<th class="cl-th-time">Scheduled</th>
+					<th class="cl-th-headsign">Headsign</th>
+					<th class="cl-th-notice">Notice</th>
+					<th class="cl-th-reported">Observed At</th>
+				</tr>
+			</thead>
+			<tbody>
+				for i, ct := range trips {
+					<tr class={ templ.KV("cl-stripe", i % 2 == 1) }>
+						<td class="cl-td-time">{ cancelTimeRange(ct) }</td>
+						<td class="cl-td-headsign">{ cancelHeadsign(ct) }</td>
+						<td class={ cancelNoticeClass(ct.LeadMin) }>{ ct.LeadLabel }</td>
+						<td class="cl-td-reported">{ ct.FirstSeen }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</article>
+}
+
+// cancelTimeRange formats the scheduled window. If EndTime wasn't denormalized
+// at cancellation time (orphan trip cache), show just the start time rather
+// than a dangling "09:16 – " with a trailing dash.
+func cancelTimeRange(ct transit.CancelledTrip) string {
+	if ct.EndTime == "" {
+		return ct.StartTime
+	}
+	return ct.StartTime + " – " + ct.EndTime
+}
+
+func cancelHeadsign(ct transit.CancelledTrip) string {
+	if ct.Headsign == "" {
+		return "(unknown)"
+	}
+	return ct.Headsign
+}
+
+templ timetableHead(sec transit.DirectionSection) {
+	<tr>
+		<th class="route-tp-trip-col">Trip</th>
+		for _, stop := range sec.Stops {
+			<th colspan="2" class="route-tp-stop-hdr">{ truncateStopName(stop.StopName) }</th>
+		}
+	</tr>
+	<tr class="route-tp-subhdr">
+		<th></th>
+		for range sec.Stops {
+			<th>Sched</th>
+			<th>Actual</th>
+		}
+	</tr>
+}
+
+templ routeScheduleBody(vm transit.RouteViewModel) {
+	if vm.Unified != nil && len(vm.Unified.Trips) > 0 {
+		for _, sec := range vm.Unified.Sections {
+			if sec.Headsign != "" {
+				<div class="route-tp-direction-label">{ sec.Headsign }</div>
+			}
+			<div class="route-tp-scroll-wrap">
+			<div class="route-tp-sticky-header" aria-hidden="true">
+				<div class="route-tp-header-scroll">
+					<table class="route-tp-table striped">
+						@timetableHead(sec)
+					</table>
+				</div>
+			</div>
+			<div class="route-tp-scroll">
+				<table class="route-tp-table striped" role="table">
+					<thead class="route-tp-thead-hidden">
+						@timetableHead(sec)
+					</thead>
+					<tbody>
+						for _, trip := range vm.Unified.Trips {
+							if tripHasStops(trip, sec) {
+								<tr class={ templ.KV("route-tp-canceled", trip.Canceled) }>
+									<td class="route-tp-trip-id">{ tripStartTime(trip, sec) }</td>
+									for _, idx := range sec.StopIdx {
+										if trip.Stops[idx].ScheduledTime == "" {
+											<td class="route-tp-empty"></td>
+											<td class="route-tp-empty"></td>
+										} else if trip.Canceled {
+											<td class="route-tp-canceled"><s>{ trip.Stops[idx].ScheduledTime }</s></td>
+											<td class="route-tp-canceled"></td>
+										} else if trip.Stops[idx].DelaySec == nil {
+											<td>{ trip.Stops[idx].ScheduledTime }</td>
+											<td class="route-tp-empty"></td>
+										} else {
+											<td>{ trip.Stops[idx].ScheduledTime }</td>
+											<td class={ tpCellClass(trip.Stops[idx]) }>
+												{ actualTime(trip.Stops[idx]) } <span class="tp-delta">{ delayDelta(trip.Stops[idx]) }</span>
+											</td>
+										}
+									}
+								</tr>
+							}
+						}
+					</tbody>
+				</table>
+			</div>
+			</div>
+		}
+		<p class="route-tp-note">On-time window: 1 min early to 5 min late. "Actuals" are best-effort estimates derived from GTFS-RT observations.</p>
+		<p class="route-tp-audit-link"><a href={ templ.SafeURL("/transit/audit/deltas/" + vm.RouteID + "?date=" + vm.DateISO) }>position audit</a></p>
+		@timetableHeaderSync()
+	} else if len(vm.Trips) == 0 {
+		<div class="route-no-service">
+			<span class="route-no-service-badge">No Service</span>
+			<p>This route does not operate on this day.</p>
+		</div>
+	} else {
+		<table class="route-trips-table" role="table">
+			<thead>
+				<tr>
+					<th>Departure</th>
+					<th>Arrival</th>
+					<th>Headsign</th>
+					if vm.IsToday {
+						<th>Status</th>
+					}
+				</tr>
+			</thead>
+			<tbody>
+				for _, t := range vm.Trips {
+					<tr class={ templ.KV("route-trip-canceled", t.Canceled) }>
+						if t.Canceled {
+							<td><s>{ formatGTFSTime(t.StartTime) }</s></td>
+							<td><s>{ formatGTFSTime(t.EndTime) }</s></td>
+							<td><s>{ t.Headsign }</s></td>
+							if vm.IsToday {
+								<td><span class="route-canceled-badge">CANCELED</span></td>
+							}
+						} else {
+							<td>{ formatGTFSTime(t.StartTime) }</td>
+							<td>{ formatGTFSTime(t.EndTime) }</td>
+							<td>{ t.Headsign }</td>
+							if vm.IsToday {
+								<td>{ tripStatus(t) }</td>
+							}
+						}
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
+}
+
+templ timetableHeaderSync() {
+	<script>
+	(function(){
+		function sync() {
+			document.querySelectorAll('.route-tp-scroll-wrap').forEach(function(wrap) {
+				var scroll = wrap.querySelector('.route-tp-scroll');
+				var hdrScroll = wrap.querySelector('.route-tp-header-scroll');
+				if (!scroll || !hdrScroll) return;
+
+				// Sync column widths from data table to header clone
+				var dataRow = scroll.querySelector('tbody tr');
+				var hdrRow = hdrScroll.querySelector('tr');
+				if (dataRow && hdrRow) {
+					var origThead = scroll.querySelector('thead');
+					if (origThead) {
+						for (var r = 0; r < origThead.rows.length && r < hdrScroll.querySelectorAll('tr').length; r++) {
+							var origCells = origThead.rows[r].cells;
+							var hdrCells = hdrScroll.querySelectorAll('tr')[r].cells;
+							for (var i = 0; i < origCells.length && i < hdrCells.length; i++) {
+								hdrCells[i].style.width = origCells[i].offsetWidth + 'px';
+							}
+						}
+					}
+				}
+
+				// Sync horizontal scroll + fade hint — rAF-throttled, passive.
+				var hasScroll = scroll.scrollWidth > scroll.clientWidth + 4;
+				wrap.classList.toggle('has-scroll', hasScroll);
+				function check() { wrap.classList.toggle('scrolled-end', scroll.scrollLeft + scroll.clientWidth >= scroll.scrollWidth - 4); }
+				var ticking = false;
+				scroll.addEventListener('scroll', function() {
+					if (ticking) return;
+					ticking = true;
+					requestAnimationFrame(function() {
+						hdrScroll.scrollLeft = scroll.scrollLeft;
+						if (hasScroll) check();
+						ticking = false;
+					});
+				}, { passive: true });
+				if (hasScroll) check();
+			});
+		}
+		window.syncTimetableHeaders = sync;
+		sync();
+		document.body.addEventListener('htmx:afterSwap', sync);
+	})();
+	</script>
+}
+
+templ routeHeader(short, long, color, tc string) {
+	<div class="route-detail-header">
+		<span class="route-color-badge" { badgeStyle(routeBadgeColor(color), routeBadgeFg(tc))... }>{ short }</span>
+		<h1 class="route-detail-title">{ routeDisplayName(short, long) }</h1>
+	</div>
+}
+
+func badgeStyle(bg, fg string) templ.Attributes {
+	return templ.Attributes{"style": "background: " + bg + "; color: " + fg}
+}
+
+func routeBadgeColor(c string) string {
+	if c != "" {
+		return c
+	}
+	return "#6b7280"
+}
+
+func routeBadgeFg(c string) string {
+	if c != "" {
+		return c
+	}
+	return "white"
+}
+
+func routeDisplayName(short, long string) string {
+	if long != "" {
+		return "Route " + short + " — " + long
+	}
+	return "Route " + short
+}
+
+func textColor(c string) string {
+	if c != "" {
+		return c
+	}
+	return "white"
+}
+
+// mergedSchedule combines both directions into one table.
+type mergedSchedule struct {
+	Stops []mergedStop       // all columns: dir A stops then dir B stops (shared terminal deduplicated)
+	Trips []mergedTrip       // all trips sorted by departure time
+}
+
+type mergedStop struct {
+	Name string
+	ID   string
+}
+
+type mergedTrip struct {
+	Canceled bool
+	Cells    []transit.TripTimepoint // len == len(Stops)
+}
+
+func buildMergedSchedule(schedules []transit.TimepointSchedule) *mergedSchedule {
+	if len(schedules) == 0 {
+		return nil
+	}
+	if len(schedules) == 1 {
+		// Single direction — use stops directly
+		var stops []mergedStop
+		for _, s := range schedules[0].Stops {
+			stops = append(stops, mergedStop{Name: s.StopName, ID: s.StopID})
+		}
+		var trips []mergedTrip
+		for _, t := range schedules[0].Trips {
+			cells := make([]transit.TripTimepoint, len(stops))
+			copy(cells, t.Stops)
+			trips = append(trips, mergedTrip{Canceled: t.Canceled, Cells: cells})
+		}
+		return &mergedSchedule{Stops: stops, Trips: trips}
+	}
+
+	// Two directions: direction A is the column order.
+	// Map direction B stops onto direction A columns (reverse match by stop ID).
+	dirA := schedules[0].Stops
+	dirB := schedules[1].Stops
+
+	// Build column list from direction A
+	var stops []mergedStop
+	stopCol := map[string]int{} // stop ID → column index
+	for i, s := range dirA {
+		stops = append(stops, mergedStop{Name: s.StopName, ID: s.StopID})
+		stopCol[s.StopID] = i
+	}
+
+	// Check for direction B stops not in direction A — append them
+	dirBCol := make([]int, len(dirB)) // maps each dir B stop index → column index
+	for i, s := range dirB {
+		if col, ok := stopCol[s.StopID]; ok {
+			dirBCol[i] = col
+		} else {
+			dirBCol[i] = len(stops)
+			stopCol[s.StopID] = len(stops)
+			stops = append(stops, mergedStop{Name: s.StopName, ID: s.StopID})
+		}
+	}
+
+	totalCols := len(stops)
+	var trips []mergedTrip
+
+	// Direction A trips
+	for _, t := range schedules[0].Trips {
+		cells := make([]transit.TripTimepoint, totalCols)
+		for i, cell := range t.Stops {
+			if i < len(dirA) {
+				cells[i] = cell
+			}
+		}
+		trips = append(trips, mergedTrip{Canceled: t.Canceled, Cells: cells})
+	}
+
+	// Direction B trips mapped onto shared columns
+	for _, t := range schedules[1].Trips {
+		cells := make([]transit.TripTimepoint, totalCols)
+		for i, cell := range t.Stops {
+			if i < len(dirBCol) {
+				cells[dirBCol[i]] = cell
+			}
+		}
+		trips = append(trips, mergedTrip{Canceled: t.Canceled, Cells: cells})
+	}
+
+	// Sort all trips chronologically
+	sort.Slice(trips, func(i, j int) bool {
+		return firstTime(trips[i].Cells) < firstTime(trips[j].Cells)
+	})
+
+	return &mergedSchedule{Stops: stops, Trips: trips}
+}
+
+func firstTime(cells []transit.TripTimepoint) string {
+	for _, c := range cells {
+		if c.ScheduledTime != "" {
+			return c.ScheduledTime
+		}
+	}
+	return "99:99"
+}
+
+type dayInfo struct {
+	Short    string // "Mon 8", "Tue 9", etc.
+	ISO      string // "2006-01-02"
+	IsFuture bool   // true if after today
+}
+
+var dayNames = [7]string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+
+func weekDays(currentISO string) []dayInfo {
+	t, err := time.ParseInLocation("2006-01-02", currentISO, time.UTC)
+	if err != nil {
+		return nil
+	}
+	todayISO := time.Now().Format("2006-01-02")
+	offset := int(t.Weekday()) - 1
+	if offset < 0 {
+		offset = 6
+	}
+	monday := t.AddDate(0, 0, -offset)
+
+	days := make([]dayInfo, 7)
+	for i := 0; i < 7; i++ {
+		d := monday.AddDate(0, 0, i)
+		iso := d.Format("2006-01-02")
+		days[i] = dayInfo{
+			Short:    fmt.Sprintf("%s %d", dayNames[i], d.Day()),
+			ISO:      iso,
+			IsFuture: iso > todayISO,
+		}
+	}
+	return days
+}
+
+func weekShift(currentISO string, days int) string {
+	t, err := time.ParseInLocation("2006-01-02", currentISO, time.UTC)
+	if err != nil {
+		return currentISO
+	}
+	return t.AddDate(0, 0, days).Format("2006-01-02")
+}
+
+func isCurrentWeek(currentISO string) bool {
+	t, err := time.ParseInLocation("2006-01-02", currentISO, time.UTC)
+	if err != nil {
+		return true
+	}
+	today := time.Now()
+	offset := int(today.Weekday()) - 1
+	if offset < 0 {
+		offset = 6
+	}
+	monday := today.AddDate(0, 0, -offset)
+	sunday := monday.AddDate(0, 0, 6)
+	return !t.Before(monday) && !t.After(sunday)
+}
+
+func cancelNoticeClass(leadMin int) string {
+	if leadMin < 15 {
+		return "cl-td-notice cl-notice-bad"
+	}
+	return "cl-td-notice cl-notice-ok"
+}
+
+func pluralS(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+func truncateStopName(name string) string {
+	// Show a short version for column headers
+	if len(name) > 18 {
+		return name[:16] + "…"
+	}
+	return name
+}
+
+func tripHasStops(trip transit.TimepointTrip, sec transit.DirectionSection) bool {
+	for _, idx := range sec.StopIdx {
+		if trip.Stops[idx].ScheduledTime != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func tripStartTime(trip transit.TimepointTrip, sec transit.DirectionSection) string {
+	for _, idx := range sec.StopIdx {
+		if trip.Stops[idx].ScheduledTime != "" {
+			return trip.Stops[idx].ScheduledTime
+		}
+	}
+	return ""
+}
+
+func tpCellClass(cell transit.TripTimepoint) string {
+	if cell.DelaySec == nil {
+		return "route-tp-no-data"
+	}
+	// Flag early departures (worse than late for riders)
+	if cell.DepartureDelay != nil && *cell.DepartureDelay < -120 {
+		return "route-tp-early-dep"
+	}
+	d := *cell.DelaySec
+	if d < -120 {
+		return "route-tp-early"
+	}
+	if d > 360 {
+		return "route-tp-late"
+	}
+	return "route-tp-ontime"
+}
+
+func tpCellTitle(cell transit.TripTimepoint) string {
+	if cell.DelaySec == nil {
+		return "No real-time data"
+	}
+	title := delayLabel(*cell.DelaySec, "arrival")
+	if cell.DepartureDelay != nil && *cell.DepartureDelay < -60 {
+		title += " · LEFT EARLY (" + delayLabel(*cell.DepartureDelay, "departure") + ")"
+	}
+	return title
+}
+
+// actualTime computes the actual arrival time from scheduled time + delay.
+func actualTime(cell transit.TripTimepoint) string {
+	if cell.DelaySec == nil {
+		return ""
+	}
+	// Parse "HH:MM" scheduled time
+	parts := strings.Split(cell.ScheduledTime, ":")
+	if len(parts) != 2 {
+		return ""
+	}
+	h, err1 := strconv.Atoi(parts[0])
+	m, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil {
+		return ""
+	}
+	totalSec := h*3600 + m*60 + *cell.DelaySec
+	if totalSec < 0 {
+		totalSec += 86400
+	}
+	ah := (totalSec / 3600) % 24
+	am := (totalSec % 3600) / 60
+	return fmt.Sprintf("%d:%02d", ah, am)
+}
+
+func delayDelta(cell transit.TripTimepoint) string {
+	if cell.DelaySec == nil {
+		return ""
+	}
+	d := *cell.DelaySec
+	min := d / 60
+	if d >= 0 {
+		return fmt.Sprintf("(+%d)", min)
+	}
+	return fmt.Sprintf("(%d)", min)
+}
+
+func delayLabel(d int, kind string) string {
+	if d == 0 {
+		return "On time"
+	}
+	abs := d
+	if abs < 0 {
+		abs = -abs
+	}
+	min := abs / 60
+	sec := abs % 60
+	if d > 0 {
+		if min == 0 {
+			return fmt.Sprintf("%ds late", sec)
+		}
+		return fmt.Sprintf("%dm %ds late", min, sec)
+	}
+	if min == 0 {
+		return fmt.Sprintf("%ds early", sec)
+	}
+	return fmt.Sprintf("%dm %ds early", min, sec)
+}
+
+func formatGTFSTime(t string) string {
+	if len(t) >= 5 {
+		return t[:5]
+	}
+	return t
+}
+
+func cancelledCount(trips []transit.ScheduledTrip) int {
+	n := 0
+	for _, t := range trips {
+		if t.Canceled {
+			n++
+		}
+	}
+	return n
+}
+
+func upcomingCancelCount(trips []transit.ScheduledTrip) int {
+	now := transit.Now()
+	nowMin := now.Hour()*60 + now.Minute()
+	n := 0
+	for _, t := range trips {
+		if !t.Canceled {
+			continue
+		}
+		tripMin := parseTimeMinutes(t.StartTime)
+		if tripMin >= nowMin {
+			n++
+		}
+	}
+	return n
+}
+
+func pastCancelCount(trips []transit.ScheduledTrip) int {
+	now := transit.Now()
+	nowMin := now.Hour()*60 + now.Minute()
+	n := 0
+	for _, t := range trips {
+		if !t.Canceled {
+			continue
+		}
+		tripMin := parseTimeMinutes(t.StartTime)
+		if tripMin < nowMin {
+			n++
+		}
+	}
+	return n
+}
+
+func parseTimeMinutes(t string) int {
+	var h, m int
+	fmt.Sscanf(t, "%d:%d", &h, &m)
+	return h*60 + m
+}
+
+func cancelLabel(n int) string {
+	if n == 1 {
+		return "cancellation"
+	}
+	return "cancellations"
+}
+
+func tripStatus(t transit.ScheduledTrip) string {
+	if t.AvgDelay == nil {
+		return "Scheduled"
+	}
+	delay := *t.AvgDelay
+	abs := float32(math.Abs(float64(delay)))
+	observed := fmt.Sprintf("%d/%d stops", t.StopsObserved, t.StopsTotal)
+	if abs <= 60 {
+		return fmt.Sprintf("On time (%s)", observed)
+	}
+	minutes := int(abs / 60)
+	if delay > 0 {
+		if minutes == 0 {
+			return fmt.Sprintf("%ds late (%s)", int(delay), observed)
+		}
+		return fmt.Sprintf("%dm late (%s)", minutes, observed)
+	}
+	if minutes == 0 {
+		return fmt.Sprintf("%ds early (%s)", int(abs), observed)
+	}
+	return fmt.Sprintf("%dm early (%s)", minutes, observed)
+}
+

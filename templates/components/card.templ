@@ -1,0 +1,41 @@
+package components
+
+// CardProps defines properties for a basic card
+type CardProps struct {
+	Title string
+}
+
+// Card renders a Pico article card with optional title
+templ Card(props CardProps) {
+	<article>
+		if props.Title != "" {
+			<header>
+				<h2>{ props.Title }</h2>
+			</header>
+		}
+		{ children... }
+	</article>
+}
+
+// LinkedCardProps defines properties for a clickable card link
+type LinkedCardProps struct {
+	Title  string
+	Href   string
+	Desc   string
+	Footer string
+}
+
+// LinkedCard renders a Pico article card as a link
+templ LinkedCard(props LinkedCardProps) {
+	<a href={ templ.SafeURL(props.Href) } class="card-link">
+		<article>
+			<header>
+				<h3>{ props.Title }</h3>
+			</header>
+			<p>{ props.Desc }</p>
+			if props.Footer != "" {
+				<footer>{ props.Footer }</footer>
+			}
+		</article>
+	</a>
+}
