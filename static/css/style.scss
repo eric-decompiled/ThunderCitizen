@@ -2378,6 +2378,17 @@ html:has(dialog[open].motion-modal) {
     color: inherit;
     opacity: 0.85;
     margin: 0 0 1.5rem;
+
+    a {
+      color: inherit;
+      text-decoration: underline;
+      text-decoration-color: rgba(74, 222, 128, 0.5);
+      text-underline-offset: 0.15em;
+
+      &:hover {
+        text-decoration-color: currentColor;
+      }
+    }
   }
 }
 
@@ -2395,6 +2406,12 @@ html:has(dialog[open].motion-modal) {
   text-decoration: none;
   font-family: var(--font-mono);
   transition: transform 120ms ease, box-shadow 120ms ease;
+
+  // Pico styles `a *` children with primary color — force cream on every
+  // descendant so the stamp/scores don't pick up theme accent as link color.
+  *, dt, dd {
+    color: inherit;
+  }
 
   &:hover,
   &:focus-visible {

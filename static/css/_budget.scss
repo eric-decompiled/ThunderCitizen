@@ -144,9 +144,7 @@
 
 summary.service-detail-header {
   padding: 0.5rem var(--space-3);
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  display: block;
   font-size: 0.75rem;
   font-weight: 600;
   list-style: none;
@@ -156,7 +154,34 @@ summary.service-detail-header {
 
   strong { color: var(--thunder-800); white-space: nowrap; }
   .budget-detail-dot { color: var(--thunder-400); }
+}
 
+.service-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.service-detail-tagline {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--thunder-600);
+  line-height: 1.4;
+  margin-top: 0.25rem;
+  padding-left: 1.3rem; // align with text after swatch
+}
+
+.service-detail-bullets {
+  margin: 0.5rem var(--space-3) 0.75rem calc(var(--space-3) + 1.3rem);
+  padding-left: 1rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+
+  li {
+    margin: 0.35rem 0;
+    color: var(--thunder-700);
+  }
 }
 
 .source-ref {

@@ -96,11 +96,23 @@ templ BudgetPartial(vm views.BudgetViewModel) {
 					for _, item := range vm.ItemsDesc {
 						<details class="service-detail-item">
 							<summary class="service-detail-header">
-								<span class="budget-swatch" aria-hidden="true" { swatchStyle(item.Color)... }>{ " " }</span>
-								<strong>{ item.Name }</strong>
-								<span class="budget-detail-dot" aria-hidden="true">&middot;</span>
-								<span class="budget-detail-amount">{ item.AmountLabel }</span>
+								<div class="service-detail-row">
+									<span class="budget-swatch" aria-hidden="true" { swatchStyle(item.Color)... }>{ " " }</span>
+									<strong>{ item.Name }</strong>
+									<span class="budget-detail-dot" aria-hidden="true">&middot;</span>
+									<span class="budget-detail-amount">{ item.AmountLabel }</span>
+								</div>
+								if tagline := serviceTagline(item.Name); tagline != "" {
+									<span class="service-detail-tagline">{ tagline }</span>
+								}
 							</summary>
+							if bullets := serviceBullets(item.Name); len(bullets) > 0 {
+								<ul class="service-detail-bullets">
+									for _, b := range bullets {
+										<li>{ b }</li>
+									}
+								</ul>
+							}
 						</details>
 					}
 				</div>
@@ -124,50 +136,25 @@ templ BudgetPartial(vm views.BudgetViewModel) {
 				return Array.prototype.slice.call(container.querySelectorAll('details.service-detail-item'));
 			}
 
-			function animateClose(d) {
-				d.classList.add('closing');
-				d.addEventListener('transitionend', function handler() {
-					d.classList.remove('closing');
-					d.open = false;
-					d.removeEventListener('transitionend', handler);
-					if (btn) updateBtn();
-				}, { once: true });
-			}
-
-			// Animated close on summary click
-			document.addEventListener('click', function(e) {
-				var summary = e.target.closest('details.service-detail-item > summary');
-				if (!summary) return;
-				var details = summary.parentElement;
-				if (!details.open) return;
-				e.preventDefault();
-				animateClose(details);
-			});
-
-			if (!btn) return;
-
 			function allOpen() {
 				var items = getAll();
 				return items.length > 0 && items.every(function(d) { return d.open; });
 			}
 
 			function updateBtn() {
-				btn.textContent = allOpen() ? 'Collapse all' : 'Expand all';
+				if (btn) btn.textContent = allOpen() ? 'Collapse all' : 'Expand all';
 			}
 
 			container.addEventListener('toggle', function(e) {
 				if (e.target.classList.contains('service-detail-item')) updateBtn();
 			}, true);
 
+			if (!btn) return;
 			btn.addEventListener('click', function() {
 				var items = getAll();
-				if (allOpen()) {
-					items.forEach(function(d) { if (d.open) animateClose(d); });
-					btn.textContent = 'Expand all';
-				} else {
-					items.forEach(function(d) { d.open = true; });
-					btn.textContent = 'Collapse all';
-				}
+				var shouldOpen = !allOpen();
+				items.forEach(function(d) { d.open = shouldOpen; });
+				updateBtn();
 			});
 		})();
 	</script>
@@ -179,5 +166,136 @@ func swatchStyle(color string) templ.Attributes {
 
 func trendBarStyle(pct int) templ.Attributes {
 	return templ.Attributes{"style": fmt.Sprintf("width:%d%%", pct)}
+}
+
+// serviceInfo carries the one-line tagline shown on the service row and the
+// expanded bullet points shown when the user clicks to open. Content comes
+// from the City of Thunder Bay 2026 Approved Operating Budget PDF —
+// Department/Division Summaries (pp. 39–169). Paraphrased or quoted; update
+// alongside the source PDF.
+type serviceInfo struct {
+	Tagline string
+	Bullets []string
+}
+
+var serviceSummaries = map[string]serviceInfo{
+	"Police Services": {
+		Tagline: "$1,030 average cost per call — lowest among comparable services in Ontario",
+		Bullets: []string{
+			"Residents consistently tell the City that police presence and response times are their top safety concern — the 2024 TBPS Community Satisfaction Survey put both at 88%, and the most recent City Citizen Satisfaction Survey flagged crime as Council's #1 issue.",
+			"The 2026 budget adds 8.0 4th Class Constables plus a Social Navigator (1.0 FTE) to connect high-need calls with social services instead of the criminal system.",
+			"An independent Staffing and Service Delivery Assessment concluded the Service needs more front-line officers to meet current and projected demand under the Community Safety and Policing Act.",
+		},
+	},
+	"Fire Rescue": {
+		Tagline: "Emergency response from 8 stations · finalizing a new City Emergency Plan in 2026",
+		Bullets: []string{
+			"Beyond fire suppression, TBFR handles auto extrication, hazardous materials, high/low angle rescue, ice/water rescue, and confined space rescue — all from 8 stations with 201 FTE.",
+			"Inspections, Fire Code enforcement, and public education are steered by the Community Risk Assessment (CRA), which flags high-risk, vulnerable, and multi-unit residential occupancies.",
+			"In 2026 TBFR operationalizes the updated City Emergency Response Plan (Incident Management System), strengthens EOC procedures, and runs coordinated exercises for severe weather and large-scale emergencies.",
+		},
+	},
+	"EMS": {
+		Tagline: "New STAR Team responds to mental-health and addiction crises",
+		Bullets: []string{
+			"Mid-2025 launch of the Specialized Treatment and Alternate Response (STAR) Team — frontline paramedics trained alongside mental health and addiction partners to divert patients from the ER.",
+			"Fall 2025: all 240.8 FTE paramedics completed The Working Mind for First Responders resiliency training; 2026 invests further in recruitment, retention, and paramedic well-being.",
+			"Serves Thunder Bay and the surrounding region (cost-shared with neighbouring municipalities); the 2026 Contribution to Reserve Fund grows to enable ambulance replacements at current market costs.",
+		},
+	},
+	"Transit": {
+		Tagline: "New fare system + on-demand microtransit rolling out in 2026",
+		Bullets: []string{
+			"142.6 FTE runs the conventional fixed-route network plus Lift+ — door-to-door service for riders whose disability prevents them from using the regular bus.",
+			"2026 brings an Automated Fare Collection System and new scheduling software for On-Demand Specialized and Microtransit routes, filling gaps the fixed schedule can't cover.",
+			"Thunder Bay Transit is mid-transformation: improving reliability and safety while exploring on-demand service that complements conventional buses.",
+		},
+	},
+	"Recreation & Culture": {
+		Tagline: "Tbaytel Multiplex opens in 2026 — the year's signature facility",
+		Bullets: []string{
+			"The new Tbaytel Multiplex adds modern indoor turf for sports and community events; 7.5 FTE are being added to run it.",
+			"Fort William Gardens celebrates its 75th anniversary; a new Recreation, Parks & Facilities Master Plan kicks off later in the year to shape the next generation of facilities.",
+			"142.3 FTE deliver aquatics, fitness, children's and older-adult programs, cultural events, and the CYCFP community-grants program funding local non-profits.",
+		},
+	},
+	"Roads & Infrastructure": {
+		Tagline: "Public snow-plow tracker with live GPS launches winter 2026",
+		Bullets: []string{
+			"Beginning winter 2026, residents can track snowplows in real time and see which streets have been cleared — part of the City's Digital Strategy.",
+			"Roads Division also deploys AI-enabled vehicle-mounted cameras for road and infrastructure inspections in 2026.",
+			"Day-to-day: paved and gravel roadways, sidewalks, drainage, traffic markings, traffic signals, and streetlights across the whole City (90.4 FTE + Engineering's 63.2).",
+		},
+	},
+	"Parks & Environment": {
+		Tagline: "Centennial Botanical Conservatory reopens in 2026 after 2-year renewal",
+		Bullets: []string{
+			"After being closed since February 2024, the Conservatory returns with improved accessibility and a new Facility Curator leading programming and displays (fully funded by new revenues).",
+			"Solid Waste extends automated cart-based garbage collection to the remaining 30,000 residential households, while the landfill manages ~100,000 tonnes of waste annually.",
+			"Parks & Open Spaces runs 2 golf courses (Chapples, Strathcona), 2 cemeteries, Chippewa and Trowbridge campgrounds, amusement rides at Chippewa and Centennial, and the urban forest — with an ongoing Emerald Ash Borer management plan.",
+		},
+	},
+	"Community Support": {
+		Tagline: "Pioneer Ridge LTC · Jasper Place · Meals on Wheels · 4 child care centres",
+		Bullets: []string{
+			"Pioneer Ridge (150 beds) is the first long-term care home in Northwestern Ontario accredited under Meaningful Care Matters™ — an emotion-focused Butterfly Model of care. Jasper Place adds 110 beds of supportive housing.",
+			"Four licensed child care centres (Algoma, Grace Remus, Ogden, Woodcrest) participate in CWELCC — enrolled families pay no more than $22/day. 2026 adds 25 spaces, focused on toddler and preschool capacity.",
+			"Meals on Wheels delivers home-cooked meals to ~250 citizens weekly, with wellness checks built in; the Municipal Homemaking Program helps low-income residents with meal prep, housekeeping, and laundry.",
+		},
+	},
+	"Corporate Services": {
+		Tagline: "The back office: IT, Finance, Revenue, Supply Management, Enforcement",
+		Bullets: []string{
+			"Delivers shared internal services — Corporate IT, Finance, Internal Audit, Revenue, Supply Management — whose costs are mostly recovered from other program areas via inter-functional recoveries.",
+			"Also runs Licensing & Enforcement: Municipal Enforcement Services (by-law) and Municipal Parking Services.",
+			"Helps maintain the City's AA+ credit rating and the Government Finance Officers Association budget presentation award.",
+		},
+	},
+	"General Government": {
+		Tagline: "Mayor, Council, City Manager, Clerk, Solicitor · the governance layer",
+		Bullets: []string{
+			"Covers the Mayor's Office and City Council, the City Manager's Department, City Solicitor & Corporate Counsel, Customer Service, Human Resources, and the Office of the City Clerk.",
+			"Sets strategic direction (the Maamawe, Growing Together vision + Strategic Plan + Smart Growth Action Plan) and provides the legal, records, and HR machinery that supports every other department.",
+			"Customer Service is the single front door for residents — phone, counter, and online — directing inquiries across all City services.",
+		},
+	},
+	"TBDSSAB Levy": {
+		Tagline: "$19.2M Thunder Bay share of the $133.1M social services board",
+		Bullets: []string{
+			"TBDSSAB is the legislated service system manager for the District — it runs Ontario Works, Community Housing, Homelessness Prevention, and Child Care & Early Years Programs across every municipality in the region.",
+			"The levy is apportioned by weighted assessment (O. Reg. 278/98) using MPAC values and local tax ratios; Thunder Bay's 2026 share is $19,225,500 — a 3.3% increase.",
+			"The City has no direct control over the amount — it's set by the TBDSSAB Board and levied to municipalities.",
+		},
+	},
+	"Capital Budget": {
+		Tagline: "Property-tax contribution to funding capital work without new debt",
+		Bullets: []string{
+			"Pays toward the Capital Budget — the multi-year plan to build, maintain, repair, and replace physical assets like roads, vehicles, parks, playgrounds, and buildings.",
+			"Funded from the operating budget via the tax levy; reduces reliance on debt and external financing for long-lived infrastructure.",
+			"Supported by the Long-Range Financial Plan and the City's AA+ credit rating.",
+		},
+	},
+	"Other Services": {
+		Tagline: "Health Unit, Conservation Authority, Library, BIAs, CEDC, MAT",
+		Bullets: []string{
+			"Thunder Bay Public Library: 4 branches, 500,000+ book loans in 2025, 270,000 in-person visits; 2026 adds 2.0 FTE security staff and launches AI Literacy workshops.",
+			"TBDHU public health levy is $3.15M (+5.0%); LRCA Conservation levy falls to $1.01M (−42%) while regional consolidation is paused.",
+			"CEDC launches its 2026–2030 strategic plan Thunder Bay Forward: Building Thunder Bay's Growth Story; Victoria Avenue and Waterfront District BIAs continue downtown revitalization work.",
+		},
+	},
+}
+
+func serviceTagline(name string) string {
+	if s, ok := serviceSummaries[name]; ok {
+		return s.Tagline
+	}
+	return ""
+}
+
+func serviceBullets(name string) []string {
+	if s, ok := serviceSummaries[name]; ok {
+		return s.Bullets
+	}
+	return nil
 }
 

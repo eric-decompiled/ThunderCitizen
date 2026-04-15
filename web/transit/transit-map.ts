@@ -2463,11 +2463,28 @@ function buildCancelRow(rid: string, t: CancelledTrip): HTMLElement {
     nameEl.textContent = name;
     top.appendChild(nameEl);
   }
-  top.appendChild(document.createTextNode(' ' + timeRange));
+  if (t.headsign) {
+    const headsignEl = document.createElement('span');
+    headsignEl.className = 'cancel-headsign';
+    headsignEl.textContent = ' to ' + t.headsign;
+    top.appendChild(headsignEl);
+  }
 
   const sub = document.createElement('span');
   sub.className = 'stat-modal-sub';
+  if (timeRange) {
+    const timeEl = document.createElement('span');
+    timeEl.className = 'cancel-time-range';
+    timeEl.textContent = timeRange;
+    sub.appendChild(timeEl);
+  }
   if (t.first_seen) {
+    if (timeRange) {
+      const sep = document.createElement('span');
+      sep.className = 'cancel-info-sep';
+      sep.textContent = '\u00B7';
+      sub.appendChild(sep);
+    }
     const label = document.createElement('span');
     label.className = 'cancel-info-label';
     label.textContent = 'First reported';

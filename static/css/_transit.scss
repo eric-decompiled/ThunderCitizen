@@ -382,10 +382,11 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--term-fg-dim);
-  border: 1px solid var(--term-border);
+  background: var(--term-bg);
+  border: 1px solid rgba(101, 123, 131, 0.35);
   border-radius: 3px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 
   .terminal-badge-num {
     font-weight: 700;
@@ -396,6 +397,7 @@
   &:hover {
     color: var(--term-fg);
     background: var(--term-bg);
+    border-color: rgba(101, 123, 131, 0.55);
   }
 
   &:focus-visible {
@@ -432,7 +434,7 @@
 }
 
 .terminal-panel-list {
-  padding: 0.5rem 0.75rem;
+  padding: 0.25rem 0.75rem;
   max-height: 300px;
   overflow-y: auto;
 
@@ -447,7 +449,60 @@
   border-bottom: 1px solid var(--term-border);
   &:last-child { border-bottom: none; }
 
-  .stat-modal-row { border-bottom: none; }
+  .stat-modal-row {
+    padding: 0.15rem 0;
+    border-bottom: none;
+  }
+
+  // Table-style: name/times column has a fixed min-width so "First reported"
+  // starts at the same X across every row. Empty space sits after short names.
+  .stat-modal-detail {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .stat-modal-bus-top {
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    min-width: 18rem; // accommodates route + headsign
+  }
+
+  .cancel-headsign {
+    color: var(--term-fg-dim);
+    font-weight: 500;
+  }
+
+  .cancel-time-range {
+    color: var(--term-fg);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-modal-sub {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    font-size: 0.68rem;
+    color: var(--term-fg-dim);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    margin-left: auto;     // pin to the right side of the row
+    min-width: 22rem;      // every row's meta block starts at the same X
+    justify-content: flex-start; // content left-aligned inside the block
+  }
+
+  // Only on phones, drop "First reported ..." to its own line under the name.
+  @media (max-width: 480px) {
+    .stat-modal-bus-top {
+      min-width: 0;
+    }
+    .stat-modal-sub {
+      flex-basis: 100%;
+      padding-left: 1.7rem; // align under the route name, past the badge
+    }
+  }
 }
 
 .cancel-info-btn {
@@ -473,12 +528,10 @@
 }
 
 .cancel-info-panel {
-  padding: 0.4rem 0.5rem 0.5rem 2.7rem;
+  padding: 0.1rem 0.5rem 0.35rem 2.7rem;
   font-size: 0.68rem;
-  line-height: 1.6;
+  line-height: 1.4;
   color: var(--term-fg);
-  background: color-mix(in srgb, var(--term-fg) 4%, transparent);
-  border-top: 1px dashed var(--term-border);
 }
 
 .cancel-info-label {
@@ -1405,7 +1458,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.35rem 0;
+  padding: 0.2rem 0;
   border-bottom: 1px solid var(--thunder-50);
   &:last-child { border-bottom: none; }
 }
