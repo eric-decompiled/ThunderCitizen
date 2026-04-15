@@ -334,10 +334,16 @@ templ transitMethodology() {
 				nothing about your aim. Some variance is inevitable and healthy.
 				Above 0.5, gaps feel random and riders lose trust in the system.
 			</p>
+			<p>
+				Cv only judges <em>regularity</em>, not whether the bus is on time. A
+				route that runs every 20 minutes when the schedule promised every 10
+				still has Cv = 0 if those gaps are perfectly even. To see whether the
+				service matches its promise, look at EWT below.
+			</p>
 		</article>
 
 		<article>
-			<header class="methods-header"><h3>Excess Wait Time (EWT)</h3><span class="methods-tag methods-tag-delay">Delay</span></header>
+			<header class="methods-header"><h3><svg class="methods-star" viewBox="0 0 24 24" fill="currentColor" width="0.9em" height="0.9em" aria-label="North-star metric"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Excess Wait Time (EWT)</h3><span class="methods-tag methods-tag-delay">Delay</span></header>
 			<p>
 				Excess Wait Time seems to be the most important operation metric. Transit managers publish a schedule
 				&mdash; that schedule is a promise. EWT measures how many extra minutes
@@ -444,15 +450,6 @@ templ transitMethodology() {
 				the gap, quadruple the rider-minutes lost.
 			</p>
 
-			<p>
-				Note: EWT and Cv are measuring the same thing.
-				<ul>EWT uses units relevant to transit</ul>
-				<ul>Cv uses dimensionless values</ul>
-
-				They are both measures for how accurately busses arrive compared to schedule.
-				They punish big misses much more compared to simple averages, which better relates
-				to how people will preceive the service.
-			</p>
 		</article>
 
 

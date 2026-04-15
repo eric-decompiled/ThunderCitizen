@@ -143,8 +143,9 @@
 }
 
 summary.service-detail-header {
-  padding: 0.5rem var(--space-3);
+  padding: 0.5rem calc(var(--space-3) + 1.5rem) 0.5rem var(--space-3);
   display: block;
+  position: relative;
   font-size: 0.75rem;
   font-weight: 600;
   list-style: none;
@@ -152,8 +153,36 @@ summary.service-detail-header {
 
   &::marker, &::-webkit-details-marker { display: none; }
 
+  // Override Pico's right-side chevron: center vertically, theme-color it
+  // via mask-image so it follows --accent in both light and dark mode.
+  &::after {
+    position: absolute;
+    top: 50%;
+    right: var(--space-3);
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    float: none;
+    background-image: none;
+    background-color: var(--accent);
+    mask-image: var(--pico-icon-chevron);
+    -webkit-mask-image: var(--pico-icon-chevron);
+    mask-size: 1rem auto;
+    -webkit-mask-size: 1rem auto;
+    mask-position: center;
+    -webkit-mask-position: center;
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+    transform: translateY(-50%) rotate(-90deg);
+    transition: transform var(--pico-transition);
+  }
+
   strong { color: var(--thunder-800); white-space: nowrap; }
   .budget-detail-dot { color: var(--thunder-400); }
+}
+
+details[open] > summary.service-detail-header::after {
+  transform: translateY(-50%) rotate(0);
 }
 
 .service-detail-row {

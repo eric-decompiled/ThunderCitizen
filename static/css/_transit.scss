@@ -2304,6 +2304,13 @@ tr.route-tp-canceled {
 .methods-tag-regularity { background: var(--status-ok); }
 .methods-tag-architecture { background: var(--accent); }
 
+.methods-star {
+  color: #f5b301;
+  vertical-align: -0.1em;
+  margin-right: 0.25em;
+  filter: drop-shadow(0 0 2px rgba(245, 179, 1, 0.45));
+}
+
 .chunk-stream-visual {
   margin: 1rem 0 0.5rem;
   display: flex;
