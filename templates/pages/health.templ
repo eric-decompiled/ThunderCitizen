@@ -1,0 +1,162 @@
+package pages
+
+import (
+	"fmt"
+
+	"thundercitizen/internal/views"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ Health(vm views.HealthViewModel) {
+	@templates.Layout("Health") {
+		@components.PageHeader(components.PageHeaderProps{
+			Title: "Health",
+		})
+
+		@components.Card(components.CardProps{Title: "Running image"}) {
+			<dl class="hc-boot-badge">
+				<dt>Image</dt>
+				<dd><code>{ vm.Image }</code></dd>
+				<dt>Commit</dt>
+				<dd>
+					if vm.Commit == "dev" || vm.Commit == "" {
+						<code>dev</code>
+					} else {
+						<a href={ templ.SafeURL("https://github.com/eric-decompiled/ThunderCitizen/commit/" + vm.Commit) } target="_blank" rel="noopener">
+							<code>{ vm.Commit }</code>
+						</a>
+					}
+				</dd>
+				<dt>Built</dt>
+				<dd><code>{ vm.BuildTime }</code></dd>
+				<dt>Booted</dt>
+				<dd><code>{ vm.BootAt.UTC().Format("2006-01-02 15:04:05 UTC") }</code></dd>
+				<dt>Uptime</dt>
+				<dd><code>{ views.FormatUptime(vm.Uptime) }</code></dd>
+				<dt>Requests</dt>
+				<dd><code>{ fmt.Sprint(vm.Total) }</code> total, <code>{ fmt.Sprint(vm.Err4xxAll) }</code> 4xx, <code>{ fmt.Sprint(vm.Err5xxAll) }</code> 5xx</dd>
+			</dl>
+		}
+
+		@components.Card(components.CardProps{Title: "Routes served since boot"}) {
+			if vm.Total == 0 {
+				<p class="hc-empty">No requests recorded yet. Hit a few pages and come back.</p>
+			} else {
+				<div class="hc-chart">
+					for _, r := range vm.Routes {
+						<div class="hc-col">
+							<div class="hc-val">{ fmt.Sprint(r.Total) }</div>
+							<div class="hc-col-track">
+								<div class="hc-col-bar" data-h={ fmt.Sprint(r.HeightPct) }></div>
+							</div>
+							<div class="hc-label" title={ r.Pattern }>{ r.Pattern }</div>
+						</div>
+					}
+					<div class="hc-col hc-col-4xx">
+						<div class="hc-val">{ fmt.Sprint(vm.Err4xxAll) }</div>
+						<div class="hc-col-track">
+							<div class="hc-col-bar hc-4xx" data-h={ fmt.Sprint(vm.Err4xxAllHeightPct) }></div>
+						</div>
+						<div class="hc-label">4xx</div>
+					</div>
+				</div>
+
+				<table class="hc-table">
+					<thead>
+						<tr>
+							<th scope="col">Route</th>
+							<th scope="col" class="hc-num">Total</th>
+							<th scope="col" class="hc-num">2xx/3xx</th>
+							<th scope="col" class="hc-num">4xx</th>
+							<th scope="col" class="hc-num">5xx</th>
+							<th scope="col" class="hc-num">p90</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, r := range vm.Routes {
+							<tr>
+								<td><code>{ r.Pattern }</code></td>
+								<td class="hc-num">{ fmt.Sprint(r.Total) }</td>
+								<td class="hc-num">{ fmt.Sprint(r.OK) }</td>
+								<td class="hc-num">{ fmt.Sprint(r.Err4xx) }</td>
+								<td class="hc-num">{ fmt.Sprint(r.Err5xx) }</td>
+								<td class="hc-num">{ views.FormatDuration(r.P90) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		}
+
+		@components.Card(components.CardProps{Title: "Response time"}) {
+			if !vm.Latency.HasData {
+				<p class="hc-empty">No requests recorded yet.</p>
+			} else {
+				<div class="hc-pct-strip">
+					<div class="hc-pct">
+						<div class="hc-pct-label">p50</div>
+						<div class="hc-pct-value">{ views.FormatDuration(vm.P50) }</div>
+					</div>
+					<div class="hc-pct hc-pct-hero">
+						<div class="hc-pct-label">p90</div>
+						<div class="hc-pct-value">{ views.FormatDuration(vm.P90) }</div>
+					</div>
+					<div class="hc-pct">
+						<div class="hc-pct-label">p99</div>
+						<div class="hc-pct-value">{ views.FormatDuration(vm.P99) }</div>
+					</div>
+				</div>
+
+				<svg class="hc-latency-svg" viewBox={ fmt.Sprintf("0 0 %d %d", views.LatencyChartWidth, views.LatencyChartHeight) } preserveAspectRatio="none" role="img" aria-label="Latency distribution line chart">
+					<defs>
+						<linearGradient id="hc-area-gradient" x1="0" y1="0" x2="0" y2="1">
+							<stop offset="0%" stop-color="currentColor" stop-opacity="0.38"></stop>
+							<stop offset="100%" stop-color="currentColor" stop-opacity="0.02"></stop>
+						</linearGradient>
+					</defs>
+
+					<g class="hc-grid">
+						<line x1="0" y1="40" x2="800" y2="40"></line>
+						<line x1="0" y1="70" x2="800" y2="70"></line>
+						<line x1="0" y1="100" x2="800" y2="100"></line>
+					</g>
+					<g class="hc-grid-v">
+						for _, t := range vm.Latency.Ticks {
+							<line x1={ fmt.Sprint(t.X) } y1="18" x2={ fmt.Sprint(t.X) } y2="120"></line>
+						}
+					</g>
+
+					<path class="hc-line-fill" d={ vm.Latency.FillPath }></path>
+					<path class="hc-line" d={ vm.Latency.Path }></path>
+
+					<g class="hc-dots">
+						for _, d := range vm.Latency.Dots {
+							<circle cx={ fmt.Sprint(d.X) } cy={ fmt.Sprint(d.Y) } r="1.8"></circle>
+						}
+					</g>
+
+					<g class="hc-pct-marks">
+						<line class="hc-pct-mark hc-pct-mark-p50" x1={ fmt.Sprint(vm.Latency.P50X) } y1="18" x2={ fmt.Sprint(vm.Latency.P50X) } y2="120"></line>
+						<line class="hc-pct-mark hc-pct-mark-p90" x1={ fmt.Sprint(vm.Latency.P90X) } y1="18" x2={ fmt.Sprint(vm.Latency.P90X) } y2="120"></line>
+						<line class="hc-pct-mark hc-pct-mark-p99" x1={ fmt.Sprint(vm.Latency.P99X) } y1="18" x2={ fmt.Sprint(vm.Latency.P99X) } y2="120"></line>
+						<text class="hc-pct-legend hc-pct-legend-p50" x={ fmt.Sprint(vm.Latency.P50X) } y="12" text-anchor="middle">p50</text>
+						<text class="hc-pct-legend hc-pct-legend-p90" x={ fmt.Sprint(vm.Latency.P90X) } y="12" text-anchor="middle">p90</text>
+						<text class="hc-pct-legend hc-pct-legend-p99" x={ fmt.Sprint(vm.Latency.P99X) } y="12" text-anchor="middle">p99</text>
+					</g>
+
+					<text class="hc-max-badge" x="795" y="12" text-anchor="end">
+						n={ fmt.Sprint(vm.Latency.Total) } · max { fmt.Sprint(vm.Latency.MaxCount) }/bucket
+					</text>
+
+					<g class="hc-axis">
+						for _, t := range vm.Latency.Ticks {
+							<line class="hc-axis-tick" x1={ fmt.Sprint(t.X) } y1="120" x2={ fmt.Sprint(t.X) } y2="124"></line>
+							<text class="hc-axis-label" x={ fmt.Sprint(t.X) } y="134" text-anchor="middle">{ t.Label }</text>
+						}
+					</g>
+				</svg>
+			}
+		}
+	}
+}

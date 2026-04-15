@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/jackc/pgx/v5"
@@ -86,7 +88,7 @@ func pageOffset(r *http.Request, limit int) int {
 
 func (h *Handlers) Home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 
@@ -170,7 +172,7 @@ func (h *Handlers) CouncillorProfile(w http.ResponseWriter, r *http.Request) {
 
 	c, termYear, found := data.FindCouncillorBySlug(slug)
 	if !found {
-		httperr.NotFound(w, "councillor not found")
+		h.NotFound(w, r)
 		return
 	}
 
@@ -202,8 +204,15 @@ func (h *Handlers) About(w http.ResponseWriter, r *http.Request) {
 	pages.About().Render(r.Context(), w)
 }
 
-func (h *Handlers) SigningGuide(w http.ResponseWriter, r *http.Request) {
-	pages.SigningGuide().Render(r.Context(), w)
+// NotFound renders the themed 404 page with a 404 status. Used for HTML
+// page routes where a plain httperr JSON response would break the theme.
+// API routes should continue to use httperr.NotFound (JSON).
+func (h *Handlers) NotFound(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", cache.Page)
+	w.WriteHeader(http.StatusNotFound)
+	vm := views.NewNotFoundViewModel(r.Method, r.URL.Path)
+	pages.NotFound(vm).Render(r.Context(), w)
 }
 
 func (h *Handlers) Council(w http.ResponseWriter, r *http.Request) {
@@ -283,7 +292,7 @@ func (h *Handlers) CouncilMeeting(w http.ResponseWriter, r *http.Request) {
 	store := newCouncilStore(h.db)
 	md, err := store.GetMeetingByID(r.Context(), id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		httperr.NotFound(w, "meeting not found")
+		h.NotFound(w, r)
 		return
 	}
 	if err != nil {
@@ -317,9 +326,47 @@ func (h *Handlers) Version(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	if err := database.HealthCheck(context.Background(), h.db); err != nil {
-		httperr.UnavailableErr(w, "database unhealthy", err)
+		// Plain text on failure — Docker's wget healthcheck greps for
+		// "OK", which this deliberately does not match.
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("NOT OK: database unhealthy\n"))
+		log.Error("health db check failed")
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+
+	// Content-negotiate three shapes:
+	//   application/json → {"status":"OK"} for machine clients that
+	//                      want to parse rather than grep
+	//   text/html        → themed dashboard for browsers
+	//   anything else    → plain "OK" for Docker's wget probe (sends
+	//                      Accept: */* by default) — keeps the
+	//                      healthcheck grep-match intact
+	accept := r.Header.Get("Accept")
+	switch {
+	case strings.Contains(accept, "application/json"):
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"OK"}`))
+	case strings.Contains(accept, "text/html"):
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", cache.Live)
+		vm := views.NewHealthViewModel(
+			valueOr(os.Getenv("TC_IMAGE"), "local-dev"),
+			Commit,
+			BuildTime,
+		)
+		pages.Health(vm).Render(r.Context(), w)
+	default:
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	}
+}
+
+func valueOr(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
 }

@@ -1879,3 +1879,393 @@ html:has(dialog[open].motion-modal) {
   white-space: nowrap;
 }
 
+// ==========================================================================
+// NOT FOUND PAGE (the Clerk)
+// ==========================================================================
+
+.nf-intro {
+  margin: 0.5rem 0 1.25rem;
+  max-width: 60ch;
+  color: var(--term-fg);
+  font-family: var(--font-prose);
+  line-height: 1.55;
+}
+
+.nf-log {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: var(--term-fg);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.nf-prompt { color: var(--accent); font-weight: 700; }
+.nf-dim    { color: var(--status-muted); }
+.nf-warn   { color: var(--status-warn); }
+.nf-err    { color: var(--status-error); }
+.nf-ok     { color: var(--accent); }
+
+.nf-aside {
+  margin: 0 0 0.75rem;
+  color: var(--status-muted);
+  font-size: 0.82rem;
+}
+
+.nf-path {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  background: color-mix(in srgb, var(--status-error) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-error) 35%, transparent);
+  border-radius: var(--radius-sm);
+  word-break: break-all;
+  color: var(--status-error);
+}
+
+.nf-match-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+
+  th, td {
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid var(--thunder-100);
+    vertical-align: baseline;
+  }
+
+  thead th {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--status-muted);
+    text-align: left;
+    border-bottom: 1px solid var(--thunder-200);
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  tbody tr:hover td {
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+
+  // Rank #1 — highlight with accent color on the row.
+  tbody tr[data-rank="1"] {
+    .nf-col-rank { color: var(--accent); font-weight: 800; }
+    .nf-col-path a { text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent); }
+  }
+
+  a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  a:hover { text-decoration: underline; }
+
+  .nf-col-rank { width: 2.5rem; color: var(--status-muted); }
+  .nf-col-dist { width: 3rem; text-align: right; color: var(--status-muted); font-variant-numeric: tabular-nums; }
+  .nf-col-path { word-break: break-all; }
+  .nf-col-label {
+    font-family: var(--font-prose);
+    color: var(--term-fg);
+    font-size: 0.82rem;
+  }
+}
+
+// ==========================================================================
+// HEALTH PAGE
+// ==========================================================================
+
+.hc-boot-badge {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 1rem;
+  row-gap: 0.25rem;
+  margin: 0;
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+
+  dt {
+    color: var(--status-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.72rem;
+    align-self: center;
+  }
+
+  dd {
+    margin: 0;
+    word-break: break-all;
+    color: var(--term-fg);
+
+    code {
+      background: transparent;
+      padding: 0;
+      color: var(--accent);
+    }
+  }
+}
+
+.hc-empty {
+  margin: 0;
+  color: var(--status-muted);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.hc-pct-strip {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.hc-pct {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--term-border);
+  border-radius: var(--radius-md);
+  background: var(--term-bg-deep);
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+.hc-pct-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--status-muted);
+  margin-bottom: 0.25rem;
+}
+
+.hc-pct-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.hc-pct-hero {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset,
+              0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
+
+  .hc-pct-label {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .hc-pct-value {
+    font-size: 2rem;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+.hc-latency-svg {
+  display: block;
+  width: 100%;
+  height: 220px;
+  background: var(--term-bg-deep);
+  border: 1px solid var(--term-border);
+  border-radius: var(--radius-md);
+  position: relative;
+  color: var(--accent); // used by currentColor in the gradient
+  @extend %term-scanlines;
+
+  .hc-grid line {
+    stroke: var(--term-border);
+    stroke-width: 0.5;
+    stroke-dasharray: 2 4;
+    opacity: 0.55;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .hc-grid-v line {
+    stroke: var(--term-border);
+    stroke-width: 0.5;
+    opacity: 0.22;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .hc-line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 65%, transparent));
+  }
+
+  .hc-line-fill {
+    fill: url(#hc-area-gradient);
+    stroke: none;
+  }
+
+  .hc-dots circle {
+    fill: var(--term-bg-deep);
+    stroke: var(--accent);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .hc-pct-mark {
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    vector-effect: non-scaling-stroke;
+  }
+  .hc-pct-mark-p50 { stroke: color-mix(in srgb, var(--accent) 70%, var(--term-bg-deep)); }
+  .hc-pct-mark-p90 {
+    stroke: var(--status-warn);
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--status-warn) 70%, transparent));
+  }
+  .hc-pct-mark-p99 { stroke: var(--status-error); }
+
+  .hc-pct-legend {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .hc-pct-legend-p50 { fill: color-mix(in srgb, var(--accent) 85%, var(--term-bg-deep)); }
+  .hc-pct-legend-p90 { fill: var(--status-warn); }
+  .hc-pct-legend-p99 { fill: var(--status-error); }
+
+  .hc-max-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    fill: var(--status-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .hc-axis-tick {
+    stroke: var(--status-muted);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .hc-axis-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    fill: var(--status-muted);
+  }
+}
+
+.hc-chart {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  height: 232px;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  background: var(--term-bg-deep);
+  border: 1px solid var(--term-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.5rem 0.25rem;
+  @extend %term-scanlines;
+}
+
+.hc-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 56px;
+  text-align: center;
+  color: var(--accent);
+}
+
+.hc-val {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--term-fg);
+  margin-bottom: 0.25rem;
+}
+
+.hc-col-track {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  background: color-mix(in srgb, var(--term-border) 30%, transparent);
+  border: 1px solid var(--term-border);
+  border-radius: 3px 3px 0 0;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.hc-col-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: currentColor;
+  transition: height 0.3s ease;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 40%, transparent));
+}
+
+// Heights for the bars are set via data-h="<pct>" (templ rejects dynamic
+// style attributes without a sanitizer). Values are snapped to nearest
+// 5% in the view model so we only emit 21 rules.
+@for $h from 0 through 20 {
+  $p: $h * 5;
+  .hc-col-bar[data-h="#{$p}"] { height: $p * 1%; }
+}
+
+.hc-4xx {
+  color: var(--status-error);
+}
+
+.hc-col-4xx {
+  color: var(--status-error);
+
+  .hc-label { color: var(--status-error); }
+}
+
+.hc-label {
+  margin-top: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--status-muted);
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 0.1rem;
+}
+
+.hc-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+
+  th, td {
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid var(--thunder-100);
+  }
+
+  thead th {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--status-muted);
+    border-bottom: 1px solid var(--thunder-200);
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  .hc-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  code {
+    background: transparent;
+    padding: 0;
+    color: var(--accent);
+  }
+}
+

@@ -1,0 +1,58 @@
+package pages
+
+import (
+	"fmt"
+
+	"thundercitizen/internal/views"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ NotFound(vm views.NotFoundViewModel) {
+	@templates.Layout("Not Found") {
+		@components.PageHeader(components.PageHeaderProps{
+			Title: "404",
+		})
+
+		<p class="nf-intro">
+			No record exists at <code class="nf-path">{ vm.Path }</code>.
+			The clerk has consulted the public registry and cannot seat
+			your inquiry. The closest entries on file are listed below,
+			ranked by how few keystrokes separate them from what you asked for.
+		</p>
+
+		@components.Card(components.CardProps{Title: "Closest matches by edit distance"}) {
+			<table class="nf-match-table">
+				<thead>
+					<tr>
+						<th scope="col" class="nf-col-rank">#</th>
+						<th scope="col" class="nf-col-path">Route</th>
+						<th scope="col" class="nf-col-dist" aria-label="Edit distance">Δ</th>
+						<th scope="col" class="nf-col-label">Section</th>
+					</tr>
+				</thead>
+				<tbody>
+					for i, m := range vm.Matches {
+						<tr data-rank={ fmt.Sprint(i + 1) }>
+							<td class="nf-col-rank">{ fmt.Sprint(i + 1) }</td>
+							<td class="nf-col-path"><a href={ templ.SafeURL(m.Path) }>{ m.Path }</a></td>
+							<td class="nf-col-dist">{ fmt.Sprint(m.Distance) }</td>
+							<td class="nf-col-label">{ m.Label }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+
+		<!--
+		    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+		    ░  motion #404:               ░
+		    ░  that the requested resource ░
+		    ░  be found                    ░
+		    ░  moved:    nobody            ░
+		    ░  seconded: nobody            ░
+		    ░  result:   no quorum         ░
+		    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+		-->
+	}
+}

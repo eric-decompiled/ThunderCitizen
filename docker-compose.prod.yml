@@ -136,7 +136,26 @@ configs:
           }
           log_skip /static/*
           encode zstd gzip
+
           reverse_proxy app:8080
+
+          # Caddy-level error page for 5xx. Fires when the app is unreachable
+          # (502 Bad Gateway from reverse_proxy) or when caddy itself errors.
+          # The app handles its own 404s in-template for perfect theming —
+          # those flow through the reverse_proxy unchanged.
+          handle_errors {
+              @5xx expression `{err.status_code} >= 500`
+              handle @5xx {
+                  root * /srv
+                  rewrite * /502.html
+                  # templates directive turns the served file into a Go
+                  # template with access to the request — lets 502.html
+                  # reflect path/method/UA/language/referer back at the
+                  # visitor for a bit of civic theatre. No IP, by design.
+                  templates
+                  file_server
+              }
+          }
       }
 
       # Legacy / alias hostnames — 302 Temporary Redirect to the canonical
@@ -148,6 +167,66 @@ configs:
       thundercitizen.com, www.thundercitizen.com {
           redir https://thundercitizen.ca{uri} temporary
       }
+
+  # Themed 5xx page served by caddy when the app is unreachable. Fully
+  # self-contained (inline CSS, no external fonts/scripts) because the app
+  # — which hosts /static — is by definition down when this fires.
+  # Status code on this response is 200, not the upstream 5xx: file_server
+  # doesn't preserve err.status_code. Acceptable tradeoff; the HTML makes
+  # the state obvious to humans, and the upstream 5xx is already logged.
+  error_502:
+    content: |
+      <!doctype html>
+      <html lang="en">
+      <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>502 &middot; Thunder Citizen</title>
+      <style>
+       :root{--bg:#0d1a0d;--fg:#4ade80;--dim:#2a5a3a;--bright:#86efac;--err:#f87171;--warn:#fbbf24;--glow:0 0 8px rgba(74,222,128,.4)}
+       *{box-sizing:border-box}
+       html,body{margin:0;min-height:100%}
+       body{background:var(--bg);color:var(--fg);font:14px/1.55 ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;padding:2.5rem 1rem;overflow-x:hidden}
+       body::before{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.22) 2px 3px);z-index:1}
+       main{max-width:720px;margin:0 auto;position:relative;z-index:2}
+       h1{font-size:.95rem;letter-spacing:.12em;color:var(--bright);text-shadow:var(--glow);margin:0 0 1.25rem;text-transform:uppercase}
+       .box{border:1px solid var(--dim);padding:1rem 1.25rem;margin-bottom:1.25rem;background:rgba(0,0,0,.25)}
+       pre{margin:0;white-space:pre-wrap;font:inherit}
+       .dim{color:var(--dim)}
+       .err{color:var(--err)}
+       .warn{color:var(--warn)}
+       .ok{color:var(--bright)}
+       .prompt::before{content:"$ ";color:var(--bright)}
+       .cursor::after{content:"\25AE";margin-left:.25rem;color:var(--bright);text-shadow:var(--glow);animation:b 1.1s steps(2) infinite}
+       @keyframes b{50%{opacity:0}}
+       a{color:var(--bright);text-shadow:var(--glow);text-decoration:none;border-bottom:1px dashed var(--dim)}
+       a:hover{background:var(--bright);color:var(--bg);text-shadow:none;border-bottom-color:transparent}
+      </style>
+      </head>
+      <body>
+      <main>
+       <h1>&#9889; Thunder Citizen &mdash; 502 Bad Gateway</h1>
+       <div class="box"><pre><span class="dim">[  0.000000]</span> <span class="ok">boot  </span> thundercitizen.service starting
+      <span class="dim">[  0.000042]</span> <span class="ok">db    </span> postgres is ready
+      <span class="dim">[  0.133742]</span> <span class="warn">quorum</span> checking for councillors...
+      <span class="dim">[  1.010203]</span> <span class="warn">quorum</span> no councillors present
+      <span class="dim">[  1.404040]</span> <span class="err">ERROR </span> motion to adjourn carried 1-0
+      <span class="dim">[  1.502502]</span> <span class="err">FATAL </span> upstream has left the chamber</pre></div>
+       <div class="box"><pre><span class="prompt"></span>systemctl status thundercitizen
+      <span class="ok">&#9679;</span> thundercitizen.service &mdash; civic research daemon
+         <span class="dim">Active:</span> <span class="err">failed</span> (Result: bad-gateway)
+         <span class="dim">Cause: </span> upstream is taking a long lunch by Lake Superior
+         <span class="dim">Remedy:</span> wait a minute. the gulls always come home.</pre></div>
+       <p class="cursor"><span class="prompt"></span>retry in 30s &mdash; or <a href="/">return home</a></p>
+      </main>
+      <!--
+              _
+             / \   motion to adjourn: carried, 1-0.
+            /   \  thunder citizen is napping.
+           /_____\ the uplink is fine, the daemon is not.
+      -->
+      </body>
+      </html>
 
 services:
   init:
@@ -203,6 +282,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-thundercitizen}
       PORT: "8080"
       ENVIRONMENT: production
+      # Surfaced on /health so operators can see exactly which image is
+      # running. Docker doesn't expose the running image ref to the
+      # container, so we bake it in at compose parse time from the
+      # same TC_IMAGE_TAG variable that selects the image above.
+      TC_IMAGE: ghcr.io/eric-decompiled/thundercitizen:${TC_IMAGE_TAG:-latest}
     volumes:
       - ./secrets:/run/secrets:ro
     # The published image's ENTRYPOINT is /usr/local/bin/server. Override it
@@ -243,6 +327,8 @@ services:
     configs:
       - source: caddyfile
         target: /etc/caddy/Caddyfile
+      - source: error_502
+        target: /srv/502.html
     volumes:
       - caddy_data:/data       # cert storage — MUST persist or you'll hit LE rate limits
       - caddy_config:/config

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,10 +22,12 @@ import (
 	"thundercitizen/internal/database"
 	"thundercitizen/internal/handlers"
 	"thundercitizen/internal/logger"
+	"thundercitizen/internal/metrics"
 	"thundercitizen/internal/middleware"
 	"thundercitizen/internal/muni"
 	"thundercitizen/internal/munisign"
 	"thundercitizen/internal/transit"
+	"thundercitizen/internal/views"
 	"thundercitizen/templates/pages"
 )
 
@@ -153,6 +156,11 @@ func main() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.SecureHeaders)
+	// Metrics counter sits between RequestID and RequestLogger. It reads
+	// the matched chi route pattern after next.ServeHTTP returns, so it
+	// feeds the /health page's in-memory route histogram with properly
+	// normalized buckets (/councillors/{slug}, not /councillors/mary).
+	r.Use(metrics.Middleware)
 	r.Use(middleware.RequestLogger)
 	// In dev (and any non-"production" ENVIRONMENT), neutralize every
 	// Cache-Control header set by inner handlers so refreshing the dev
@@ -187,7 +195,6 @@ func main() {
 		r.Get("/minutes/{id}", h.CouncilMeeting)
 		r.Get("/motions", h.Motions)
 		r.Get("/about", h.About)
-		r.Get("/docs/signing", h.SigningGuide)
 	})
 	// Accept HEAD on /health too — Docker's wget --spider probe uses HEAD
 	// and was getting a 405 from a GET-only route, which made the container
@@ -200,6 +207,39 @@ func main() {
 	// Transit — self-contained page + API routes
 	r.Mount("/transit", th.PageRoutes())
 	r.Mount("/api/transit", th.APIRoutes())
+
+	// Catch-all for unmatched top-level paths. /api/transit/* misses land
+	// in the mounted sub-router's own default 404 (plain text), so API
+	// clients continue to get a non-HTML response.
+	r.NotFound(h.NotFound)
+
+	// Build the 404 page's route registry by walking the chi router.
+	// Only GET routes that a human could navigate to — no API prefixes,
+	// no static assets, no health probes, no parameterized paths. Done
+	// once here so the 404 handler doesn't re-walk per request.
+	var registryPaths []string
+	_ = chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		if method != http.MethodGet {
+			return nil
+		}
+		if strings.ContainsAny(route, "{*") {
+			return nil
+		}
+		if strings.HasPrefix(route, "/api/") ||
+			strings.HasPrefix(route, "/static/") ||
+			route == "/health" ||
+			route == "/version" {
+			return nil
+		}
+		registryPaths = append(registryPaths, route)
+		return nil
+	})
+	views.SetNotFoundRegistry(registryPaths)
+
+	// Boot time drives the /health page's uptime readout. Set it right
+	// before ListenAndServe so database migrations and other startup
+	// work don't count against uptime.
+	metrics.SetBootTime(time.Now())
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
