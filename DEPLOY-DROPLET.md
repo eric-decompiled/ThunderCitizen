@@ -131,19 +131,21 @@ service (64 hex chars from `/dev/urandom`) and stashed at
 ## 7. Bring up the stack
 
 ```bash
-./scripts/run.sh
+./scripts/deploy.sh
 ```
 
-`run.sh` is a thin wrapper that saves typing `-f docker-compose.prod.yml`
-on every command. With no args it runs `up -d`. Other useful forms:
+`deploy.sh` cold-boots the full stack on first run and hot-redeploys
+(bounces only the app container onto the latest image) on subsequent
+runs. Use it for both the initial bring-up and every rollout.
+
+Shortcut on the droplet: `alias dc='docker compose -f docker-compose.prod.yml'`. Useful commands:
 
 | Command | What |
 |---|---|
-| `./scripts/run.sh` | bring the stack up |
-| `./scripts/run.sh logs -f` | tail logs |
-| `./scripts/run.sh ps` | service status |
-| `./scripts/run.sh pull` | pull a fresh image, then up -d |
-| `./scripts/run.sh down` | stop everything |
+| `./scripts/deploy.sh` | cold boot or hot redeploy (idempotent) |
+| `dc logs -f` | tail logs |
+| `dc ps` | service status |
+| `dc down` | stop everything |
 
 First boot order:
 1. `init` runs once, generates `./secrets/postgres_password`, exits 0
@@ -156,7 +158,7 @@ First boot order:
 Watch it happen:
 
 ```bash
-./scripts/run.sh logs -f
+docker compose -f docker-compose.prod.yml logs -f
 ```
 
 You should see caddy log a successful certificate obtain within ~30 seconds.
@@ -180,10 +182,10 @@ the signature, and applies any datasets whose SHA-256 isn't already in
 `data_patch_log`. Subsequent boots no-op; the first check is throttled by
 `muni_fetch_state.last_checked_at` (24h window).
 
-To verify after the first `./scripts/run.sh`:
+To verify after the first `up`:
 
 ```bash
-./scripts/run.sh exec -T db psql -U thundercitizen -d thundercitizen -c \
+docker compose -f docker-compose.prod.yml exec -T db psql -U thundercitizen -d thundercitizen -c \
     "SELECT patch_id, action, signer, at FROM data_patch_log ORDER BY at;"
 ```
 
@@ -193,9 +195,9 @@ To reseed from scratch (e.g. testing): wipe the postgres volume and bring
 the stack back up — the app re-applies everything on boot.
 
 ```bash
-./scripts/run.sh down
+docker compose -f docker-compose.prod.yml down
 docker volume rm thundercitizen-prod_postgres_data
-./scripts/run.sh up -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 ## 9. Set up backups
@@ -341,10 +343,10 @@ docker compose -f docker-compose.prod.yml exec db psql -U thundercitizen -l
 
 **Force GTFS reload** (routes disappeared but hash still stored):
 ```bash
-./scripts/run.sh exec -T db psql -U thundercitizen -d thundercitizen \
+docker compose -f docker-compose.prod.yml exec -T db psql -U thundercitizen -d thundercitizen \
     -c "DELETE FROM transit.feed_state WHERE feed_type = 'gtfs_static';"
-./scripts/run.sh up -d --force-recreate app
-./scripts/run.sh logs --since=30s -f app 2>&1 | grep -i gtfs
+./scripts/deploy.sh --no-git
+docker compose -f docker-compose.prod.yml logs --since=30s -f app 2>&1 | grep -i gtfs
 ```
 
 **Disk filling up:**

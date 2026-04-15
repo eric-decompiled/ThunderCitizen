@@ -1,54 +1,49 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deploy to the production droplet.
-#
-# SSHes into the `tc` host, pulls latest main, pulls the new app image,
-# and restarts the app container. The db and caddy services are left alone.
+# Deploy on the droplet. Idempotent.
+# - Cold boot (stack not fully up): pulls images, brings everything up.
+# - Hot redeploy (db + caddy already running): pulls the app image and
+#   recreates only the app container. db and caddy are left alone so
+#   downtime is just the app restart.
 #
 # Usage:
-#   ./scripts/deploy.sh              # deploy HEAD of main
-#   ./scripts/deploy.sh --no-pull    # skip `docker compose pull` (use local image)
-#   HOST=other ./scripts/deploy.sh   # override ssh host alias
+#   ./scripts/deploy.sh            # git pull, then act on current state
+#   ./scripts/deploy.sh --no-git   # skip git pull
+#
+# Run from your laptop:
+#   ssh tc '/opt/ThunderCitizen/scripts/deploy.sh'
 
-HOST="${HOST:-tc}"
-REMOTE_DIR="${REMOTE_DIR:-/opt/ThunderCitizen}"
+cd "$(dirname "$0")/.."
+
 COMPOSE="docker compose -f docker-compose.prod.yml"
+GIT_PULL=1
 
-PULL_IMAGE=1
 for arg in "$@"; do
     case "$arg" in
-        --no-pull) PULL_IMAGE=0 ;;
-        -h|--help)
-            sed -n '3,12p' "$0" | sed 's/^# \{0,1\}//'
-            exit 0
-            ;;
+        --no-git) GIT_PULL=0 ;;
+        -h|--help) sed -n '3,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) printf 'unknown flag: %s\n' "$arg" >&2; exit 2 ;;
     esac
 done
 
 log() { printf '\n==> %s\n' "$*"; }
 
-log "deploying to ${HOST}:${REMOTE_DIR}"
-
-ssh -t "$HOST" "REMOTE_DIR='${REMOTE_DIR}' COMPOSE='${COMPOSE}' PULL_IMAGE='${PULL_IMAGE}' bash -s" <<'REMOTE'
-set -euo pipefail
-
-cd "$REMOTE_DIR"
-
-echo "==> git pull"
-git pull --ff-only
-
-if [[ "$PULL_IMAGE" == "1" ]]; then
-    echo "==> $COMPOSE pull app"
-    $COMPOSE pull app
+if [[ "$GIT_PULL" == "1" ]] && [ -d .git ]; then
+    log "git pull"
+    git pull --ff-only
 fi
 
-echo "==> $COMPOSE up -d app"
-$COMPOSE up -d app
+running=$($COMPOSE ps --services --filter status=running 2>/dev/null || true)
 
-echo "==> status"
-$COMPOSE ps app
-REMOTE
+if grep -qx db <<<"$running" && grep -qx caddy <<<"$running"; then
+    log "stack is up — bouncing app only"
+    $COMPOSE pull --quiet app
+    $COMPOSE up -d --no-deps --force-recreate --quiet-pull app
+else
+    log "cold boot — bringing full stack up"
+    $COMPOSE pull --quiet
+    $COMPOSE up -d --remove-orphans
+fi
 
-log "done"
+$COMPOSE ps
