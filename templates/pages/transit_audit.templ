@@ -10,7 +10,7 @@ import (
 )
 
 templ AuditIndex(vm transit.AuditIndexViewModel) {
-	@templates.Layout("Transit — Delta Audit") {
+	@templates.Layout("Transit — Delta Audit", "Thunder Bay Transit delta audit — cross-checks GPS and TripUpdate feeds to flag data quality issues.") {
 		@components.TransitNav(components.TransitNavProps{Current: "routes"})
 		<section class="metrics-panel" aria-label="Delta audit — route chooser">
 			<div class="metrics-panel-header">
@@ -42,7 +42,7 @@ templ AuditIndex(vm transit.AuditIndexViewModel) {
 }
 
 templ AuditRoute(vm transit.AuditRouteViewModel) {
-	@templates.Layout(fmt.Sprintf("Audit — Route %s %s", vm.ShortName, vm.LongName)) {
+	@templates.Layout(fmt.Sprintf("Audit — Route %s %s", vm.ShortName, vm.LongName), fmt.Sprintf("Delta audit for Thunder Bay Transit Route %s — GPS vs TripUpdate divergence per stop.", vm.ShortName)) {
 		@components.TransitNav(components.TransitNavProps{Current: "routes"})
 		<p class="route-back"><a href={ templ.SafeURL("/transit/audit/deltas?date=" + vm.DateISO) }>&lsaquo; All Routes</a></p>
 		<section class="metrics-panel audit-panel" aria-label={ fmt.Sprintf("Delta audit — route %s", vm.ShortName) }>

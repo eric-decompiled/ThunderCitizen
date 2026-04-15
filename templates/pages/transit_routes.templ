@@ -8,7 +8,7 @@ import (
 )
 
 templ TransitRoutes(vm transit.RoutesViewModel) {
-	@templates.Layout("Transit — Routes") {
+	@templates.Layout("Transit — Routes", "Thunder Bay Transit route directory — compare every route by cancellations, excess wait time, and headway reliability.") {
 		@components.TransitNav(components.TransitNavProps{Current: "routes"})
 
 		<section class="metrics-panel" aria-label="Route directory">

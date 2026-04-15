@@ -16,9 +16,9 @@
   --thunder-100: #eee8d5;  // base2  — recessed surface
   --thunder-50:  #fdf6e3;  // base3  — page background
 
-  // Accent — darkened solarized green (5.4:1 on cream)
-  --accent: #546e00;
-  --accent-hover: #425800;
+  // Accent — darkened solarized green (6.4:1 on cream, 5.2:1 on --term-bg-deep)
+  --accent: #4a6100;
+  --accent-hover: #3a4d00;
   --accent-light: #f0f4c3;
 
   // Terminal semantic tokens (global)
@@ -27,8 +27,8 @@
   --term-fg: #475b65;
   --term-fg-bright: #073642;
   --term-fg-dim: #4a6068;
-  --term-accent: #546e00;
-  --term-accent-bright: #425800;
+  --term-accent: #4a6100;
+  --term-accent-bright: #3a4d00;
   --term-accent-dim: #859900;
   --term-border: rgba(101, 123, 131, 0.15);
   --term-glow: none;

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"thundercitizen/internal/metrics"
+	"thundercitizen/internal/transit"
 )
 
 // HealthViewModel drives the /health page. Built from the metrics
@@ -31,6 +32,23 @@ type HealthViewModel struct {
 	P99 time.Duration
 
 	Latency LatencyChart
+
+	GTFSFeeds []FeedHealth
+}
+
+// FeedHealth is the template-facing representation of one GTFS-RT feed's
+// current polling health. Built from transit.FeedStats in NewHealthViewModel
+// so the template doesn't have to compute status strings or relative times.
+type FeedHealth struct {
+	Name             string // display: "Vehicles", "Trips", "Alerts"
+	Interval         string // e.g. "6s", "60s"
+	Status           string // "ok" | "stale" | "error" | "pending"
+	StatusLabel      string // display: "OK", "Stale", "Error", "Waiting"
+	LastSuccessLabel string // "4s ago", "—" if never
+	LastFeedTSLabel  string // upstream feed timestamp, human-readable
+	LastError        string
+	SuccessCount     uint64
+	ErrorCount       uint64
 }
 
 // LatencyChart holds the pre-computed geometry for the /health latency
@@ -83,7 +101,7 @@ type RouteCount struct {
 // NewHealthViewModel composes the view model. Pass the image string
 // and build metadata in so this package doesn't reach back into env or
 // the handlers package.
-func NewHealthViewModel(image, commit, buildTime string) HealthViewModel {
+func NewHealthViewModel(image, commit, buildTime string, feeds []transit.FeedStats) HealthViewModel {
 	snap := metrics.Read()
 
 	rows := make([]RouteCount, 0, len(snap.Routes))
@@ -127,7 +145,78 @@ func NewHealthViewModel(image, commit, buildTime string) HealthViewModel {
 		P90:     metrics.Percentile(snap.GlobalLatency[:], 90),
 		P99:     metrics.Percentile(snap.GlobalLatency[:], 99),
 		Latency: latency,
+
+		GTFSFeeds: buildFeedHealth(feeds),
 	}
+}
+
+// buildFeedHealth converts raw recorder snapshots into template-friendly
+// rows. Status thresholds: a feed is "stale" if its last successful fetch
+// is older than 3× its expected poll interval, "error" if the most recent
+// attempt failed after any successful fetches, "pending" if it hasn't
+// logged a success yet (fresh boot).
+func buildFeedHealth(feeds []transit.FeedStats) []FeedHealth {
+	if len(feeds) == 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	out := make([]FeedHealth, 0, len(feeds))
+	for _, f := range feeds {
+		row := FeedHealth{
+			Name:         feedDisplayName(f.FeedType),
+			Interval:     FormatDuration(f.Interval),
+			SuccessCount: f.SuccessCount,
+			ErrorCount:   f.ErrorCount,
+			LastError:    f.LastError,
+		}
+		switch {
+		case f.LastSuccessAt.IsZero() && f.LastErrorAt.IsZero():
+			row.Status = "pending"
+			row.StatusLabel = "Waiting"
+			row.LastSuccessLabel = "—"
+			row.LastFeedTSLabel = "—"
+		case f.LastErrorAt.After(f.LastSuccessAt):
+			row.Status = "error"
+			row.StatusLabel = "Error"
+			row.LastSuccessLabel = formatSince(now, f.LastSuccessAt)
+			row.LastFeedTSLabel = formatSince(now, f.LastFeedTS)
+		case !f.LastSuccessAt.IsZero() && now.Sub(f.LastSuccessAt) > 3*f.Interval:
+			row.Status = "stale"
+			row.StatusLabel = "Stale"
+			row.LastSuccessLabel = formatSince(now, f.LastSuccessAt)
+			row.LastFeedTSLabel = formatSince(now, f.LastFeedTS)
+		default:
+			row.Status = "ok"
+			row.StatusLabel = "OK"
+			row.LastSuccessLabel = formatSince(now, f.LastSuccessAt)
+			row.LastFeedTSLabel = formatSince(now, f.LastFeedTS)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func feedDisplayName(t string) string {
+	switch t {
+	case "vehicles":
+		return "Vehicle positions"
+	case "trips":
+		return "Trip updates"
+	case "alerts":
+		return "Service alerts"
+	}
+	return t
+}
+
+func formatSince(now, t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	d := now.Sub(t)
+	if d < 0 {
+		d = 0
+	}
+	return FormatDuration(d) + " ago"
 }
 
 // buildLatencyChart turns a bucket histogram into SVG geometry ready

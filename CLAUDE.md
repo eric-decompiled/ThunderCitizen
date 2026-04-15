@@ -64,7 +64,7 @@ type MapProps struct {
 
 ### Palettes
 
-**Light (Solarized, contrast-corrected):** cream bg `#fdf6e3`, brown-grey text scale, dark olive-green accent `#546e00` (5.4:1). Body text `#475b65` (6.6:1). Status colors darkened for AA on cream.
+**Light (Solarized, contrast-corrected):** cream bg `#fdf6e3`, brown-grey text scale, dark olive-green accent `#4a6100` (6.4:1 on cream, 5.2:1 on `--term-bg-deep`). Body text `#475b65` (6.6:1). Status colors darkened for AA on cream.
 
 **Dark (Green Phosphor):** near-black green bg `#0d1a0d`, phosphor green text `#4ade80` (10.3:1), bright green accent. CRT scanlines on header, green glow on title.
 
@@ -75,7 +75,7 @@ Dark mode is defined via `@mixin dark-theme` applied to both `@media (prefers-co
 | Variable | Light | Dark | Purpose |
 |----------|-------|------|---------|
 | `--thunder-900` to `--thunder-50` | Solarized grey scale | Green phosphor scale | Text/bg hierarchy (flips) |
-| `--accent` | `#546e00` (olive green) | `#4ade80` (phosphor) | Headings, links, buttons |
+| `--accent` | `#4a6100` (olive green) | `#4ade80` (phosphor) | Headings, links, buttons |
 | `--term-*` tokens | Solarized values | Phosphor values | Semantic terminal tokens (bg, fg, border, glow) |
 | `--surface-dark` | `#002b36` | `#0a100a` | Header/footer background |
 | `--status-ok/warn/error/info/early-dep/muted` | Darkened for AA on cream | Bright for dark bg | Status semantics |

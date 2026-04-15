@@ -2269,3 +2269,206 @@ html:has(dialog[open].motion-modal) {
   }
 }
 
+.hc-feeds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+
+  th, td {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--thunder-200);
+  }
+
+  th {
+    text-align: left;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--thunder-600);
+    font-weight: 700;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  .hc-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  code {
+    background: transparent;
+    padding: 0;
+    color: var(--accent);
+  }
+
+  .hc-feed-error-row td {
+    padding-top: 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--thunder-200);
+    color: var(--status-error);
+  }
+}
+
+.hc-feed-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--status-muted) 15%, var(--thunder-50));
+  color: var(--status-muted);
+
+  &.hc-feed-badge-ok {
+    background: color-mix(in srgb, var(--status-ok) 18%, var(--thunder-50));
+    color: var(--status-ok);
+  }
+
+  &.hc-feed-badge-stale {
+    background: color-mix(in srgb, var(--status-warn) 18%, var(--thunder-50));
+    color: var(--status-warn);
+  }
+
+  &.hc-feed-badge-error {
+    background: color-mix(in srgb, var(--status-error) 18%, var(--thunder-50));
+    color: var(--status-error);
+  }
+}
+
+// ==========================================================================
+// PAGESPEED INSPECTION PASS CERTIFICATE (/about)
+// ==========================================================================
+// Mini terminal-screen hero framing a food-inspection-style PASS decal.
+// Mirrors .home-hero (phosphor green on dark surface, scanlines) so the
+// cert lands like a certificate posted inside the restaurant window.
+
+.pagespeed-hero {
+  --hero-glow: 0 0 12px rgba(74, 222, 128, 0.4);
+  --hero-screen-glow: inset 0 0 60px rgba(74, 222, 128, 0.05);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2.5rem 1.5rem 3rem;
+  margin: 2rem -1.5rem 0;
+  background:
+    radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.25) 100%),
+    var(--surface-dark);
+  border-top: 2px solid var(--term-border);
+  position: relative;
+  @extend %term-scanlines;
+  box-shadow: var(--hero-screen-glow);
+  color: #4ade80;
+
+  h2 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #4ade80;
+    margin: 0 0 0.5rem;
+    filter: drop-shadow(var(--hero-glow));
+  }
+
+  .lead {
+    font-family: var(--font-prose);
+    font-size: 1rem;
+    color: inherit;
+    opacity: 0.85;
+    margin: 0 0 1.5rem;
+  }
+}
+
+.pagespeed-cert {
+  display: block;
+  max-width: 420px;
+  width: 100%;
+  padding: var(--space-4);
+  background: #047857;
+  color: #fdf6e3;
+  border: 3px solid #fdf6e3;
+  outline: 2px solid #047857;
+  outline-offset: 2px;
+  text-align: center;
+  text-decoration: none;
+  font-family: var(--font-mono);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(-2px) rotate(-0.5deg);
+    box-shadow: 0 8px 20px rgba(4, 120, 87, 0.35);
+  }
+
+  &:focus-visible {
+    outline-color: var(--accent);
+  }
+}
+
+.pagespeed-cert-eyebrow {
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-bottom: var(--space-2);
+}
+
+.pagespeed-cert-stamp {
+  font-size: 3.5rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  line-height: 1;
+  margin: var(--space-2) 0 var(--space-3);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.18);
+}
+
+.pagespeed-cert-scores {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed rgba(253, 246, 227, 0.5);
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+  }
+
+  dt {
+    font-size: 0.55rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    line-height: 1.1;
+  }
+
+  dd {
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.pagespeed-cert-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.9;
+  padding-top: var(--space-2);
+  border-top: 1px dashed rgba(253, 246, 227, 0.5);
+}
+
+.pagespeed-cert-link {
+  font-weight: 700;
+}
+

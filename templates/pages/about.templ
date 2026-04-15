@@ -6,7 +6,7 @@ import (
 )
 
 templ About() {
-	@templates.Layout("About") {
+	@templates.Layout("About", "Thunder Citizen is an independent project collecting Thunder Bay's transit, council, and budget data from public sources.") {
 		@components.PageHeader(components.PageHeaderProps{
 			Title: "About",
 		})
@@ -70,6 +70,25 @@ templ About() {
 			<p>Outbound links (e.g. to the City of Thunder Bay, open data portal, or other local sites) are subject to the privacy policies of those destinations.</p>
 			<p>Privacy questions or requests: <a href="mailto:privacy@thundercitizen.ca">privacy@thundercitizen.ca</a></p>
 		}
+
+		<section class="pagespeed-hero">
+			<h2>Page Inspection</h2>
+			<p class="lead"><a href="https://en.wikipedia.org/wiki/Computer_accessibility" target="_blank" rel="noopener">a11y</a> for the People! (of Thunder Bay)</p>
+			<a class="pagespeed-cert" href="https://pagespeed.web.dev/analysis/https-thundercitizen-ca/ubex0rt08g?form_factor=desktop" target="_blank" rel="noopener" aria-label="View PageSpeed Insights report for thundercitizen.ca">
+				<div class="pagespeed-cert-eyebrow">Google PageSpeed Insights · Desktop</div>
+				<div class="pagespeed-cert-stamp">PASS</div>
+				<dl class="pagespeed-cert-scores">
+					<div><dt>Performance</dt><dd>100</dd></div>
+					<div><dt>Accessibility</dt><dd>100</dd></div>
+					<div><dt>Best Practices</dt><dd>100</dd></div>
+					<div><dt>SEO</dt><dd>100</dd></div>
+				</dl>
+				<div class="pagespeed-cert-footer">
+					<span>Audited April 15, 2026</span>
+					<span class="pagespeed-cert-link">View report &rarr;</span>
+				</div>
+			</a>
+		</section>
 
 	}
 }

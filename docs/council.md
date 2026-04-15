@@ -187,7 +187,6 @@ The minutes page displays a disclaimer stating that summaries are AI-generated b
 ## Pages
 
 - `/councillors` — council members by term with client-side switching; vote stats (dissent rate, for/against), notable votes table, vote matrix with sticky photo headers and animated detail modal, interactive ward map with Esri satellite tiles and ward descriptions
-- `/councillors/{slug}` — individual councillor profile with full voting record
 - `/minutes` — meeting list with term selector, filter chips (All / Recorded Votes / Defeated), HTMX pagination
 - `/minutes/{id}` — meeting detail with all motions; procedural items collapsed, substantive motions with summary, clause breakdown, vote details
 - `/motions` — full-text search across all motions with term, significance, and result filters

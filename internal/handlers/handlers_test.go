@@ -20,7 +20,6 @@ type stubCouncilStore struct {
 	councillorNotableAll   func(ctx context.Context, term string) (map[string][]council.CouncillorNotableVote, error)
 	headlineVotes          func(ctx context.Context, term string) ([]council.HeadlineVote, error)
 	voteMatrix             func(ctx context.Context, term string) ([]council.VoteMatrixMotion, []council.VoteMatrixRecord, error)
-	councillorVotingRecord func(ctx context.Context, councillor, term string) ([]council.CouncillorVoteRow, error)
 	motionStats            func(ctx context.Context, term string) (int, int, int, error)
 	searchMotions          func(ctx context.Context, f council.MotionFilter) ([]council.MotionRow, int, error)
 	getMeetingByID         func(ctx context.Context, id string) (*council.MeetingDetail, error)
@@ -41,9 +40,6 @@ func (s stubCouncilStore) HeadlineVotes(ctx context.Context, term string) ([]cou
 }
 func (s stubCouncilStore) VoteMatrix(ctx context.Context, term string) ([]council.VoteMatrixMotion, []council.VoteMatrixRecord, error) {
 	return s.voteMatrix(ctx, term)
-}
-func (s stubCouncilStore) CouncillorVotingRecord(ctx context.Context, councillor, term string) ([]council.CouncillorVoteRow, error) {
-	return s.councillorVotingRecord(ctx, councillor, term)
 }
 func (s stubCouncilStore) MotionStats(ctx context.Context, term string) (int, int, int, error) {
 	return s.motionStats(ctx, term)

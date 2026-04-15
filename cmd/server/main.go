@@ -147,7 +147,7 @@ func main() {
 	})
 	th.VehicleStream.Start(transitCtx)
 
-	h := handlers.New(db)
+	h := handlers.New(db, recorder)
 
 	r := chi.NewRouter()
 	// RequestID runs outermost so the per-request logger it attaches to
@@ -159,7 +159,7 @@ func main() {
 	// Metrics counter sits between RequestID and RequestLogger. It reads
 	// the matched chi route pattern after next.ServeHTTP returns, so it
 	// feeds the /health page's in-memory route histogram with properly
-	// normalized buckets (/councillors/{slug}, not /councillors/mary).
+	// normalized buckets (/minutes/{id}, not /minutes/2026-03-17).
 	r.Use(metrics.Middleware)
 	r.Use(middleware.RequestLogger)
 	// In dev (and any non-"production" ENVIRONMENT), neutralize every
@@ -190,7 +190,6 @@ func main() {
 		r.Get("/", h.Home)
 		r.Get("/budget", h.Budget)
 		r.Get("/councillors", h.Councillors)
-		r.Get("/councillors/{slug}", h.CouncillorProfile)
 		r.Get("/minutes", h.Council)
 		r.Get("/minutes/{id}", h.CouncilMeeting)
 		r.Get("/motions", h.Motions)

@@ -7,7 +7,7 @@ import (
 )
 
 templ CouncilMeeting(vm views.MeetingViewModel) {
-	@templates.Layout("Minutes") {
+	@templates.Layout("Minutes", fmt.Sprintf("%s — Thunder Bay City Council meeting. %d motions with full text, vote breakdowns, and media coverage.", vm.Date, vm.SubstantiveCount)) {
 		<div class="meeting-detail-nav">
 			<a href="/minutes">&larr; Back to Minutes</a>
 			if vm.MinutesURL != "" {
@@ -111,9 +111,9 @@ templ substantiveMotion(m views.MotionView, index int) {
 		}
 		<div class="meeting-row-meta">
 			<span>
-				Moved by <a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(m.MovedBy)) }><strong>{ m.MovedBy }</strong></a>
+				Moved by <strong>{ m.MovedBy }</strong>
 				if m.SecondedBy != "" {
-					, seconded by <a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(m.SecondedBy)) }><strong>{ m.SecondedBy }</strong></a>
+					, seconded by <strong>{ m.SecondedBy }</strong>
 				}
 			</span>
 			if m.MediaURL != "" {
@@ -128,7 +128,7 @@ templ substantiveMotion(m views.MotionView, index int) {
 						<h4>Yea ({ fmt.Sprintf("%d", m.YeaCount) })</h4>
 						<ul>
 							for _, name := range m.Votes.For {
-								<li><a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(name)) }>{ name }</a></li>
+								<li>{ name }</li>
 							}
 						</ul>
 					</div>
@@ -136,7 +136,7 @@ templ substantiveMotion(m views.MotionView, index int) {
 						<h4>Nay ({ fmt.Sprintf("%d", m.NayCount) })</h4>
 						<ul>
 							for _, name := range m.Votes.Against {
-								<li><a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(name)) }>{ name }</a></li>
+								<li>{ name }</li>
 							}
 						</ul>
 					</div>
@@ -145,7 +145,7 @@ templ substantiveMotion(m views.MotionView, index int) {
 							<h4>Absent ({ fmt.Sprintf("%d", len(m.Votes.Absent)) })</h4>
 							<ul>
 								for _, name := range m.Votes.Absent {
-									<li><a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(name)) }>{ name }</a></li>
+									<li>{ name }</li>
 								}
 							</ul>
 						</div>

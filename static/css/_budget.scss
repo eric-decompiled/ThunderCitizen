@@ -212,7 +212,22 @@ summary.service-detail-header {
 
 .budget-source-note {
   font-size: 0.8rem;
-  color: var(--thunder-400);
+  color: var(--thunder-600);
+  margin: 1rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--thunder-200);
+}
+
+.budget-sankey-note {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--thunder-700);
+  margin: 0;
+
+  strong {
+    color: var(--accent);
+    font-weight: 700;
+  }
 }
 
 

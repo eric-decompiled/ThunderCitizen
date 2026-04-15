@@ -836,50 +836,6 @@ type CouncillorNotableVote struct {
 	Date      string
 }
 
-// CouncillorVoteRow is a single recorded vote for a councillor's voting record page.
-type CouncillorVoteRow struct {
-	MotionID   int64
-	MeetingID  string
-	Date       string
-	AgendaItem string
-	Summary    string
-	Position   string // for, against, absent
-	Result     string // CARRIED, LOST, TIE
-	YeaCount   int
-	NayCount   int
-}
-
-// CouncillorVotingRecord returns all recorded votes for a councillor in a term.
-func (s *Store) CouncillorVotingRecord(ctx context.Context, councillor, term string) ([]CouncillorVoteRow, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT mo.id, m.id, m.date::text,
-		       COALESCE(NULLIF(mo.llm_label, ''), COALESCE(NULLIF(mo.agenda_item, ''), LEFT(mo.motion_text, 60))),
-		       COALESCE(NULLIF(mo.llm_summary, ''), LEFT(mo.motion_text, 200)),
-		       vr.position, mo.result,
-		       COALESCE((SELECT count(*) FROM council_vote_records r WHERE r.motion_id = mo.id AND r.position = 'for'), 0),
-		       COALESCE((SELECT count(*) FROM council_vote_records r WHERE r.motion_id = mo.id AND r.position = 'against'), 0)
-		FROM council_vote_records vr
-		JOIN council_motions mo ON mo.id = vr.motion_id
-		JOIN council_meetings m ON m.id = mo.meeting_id
-		WHERE vr.councillor = $1 AND m.term = $2
-		ORDER BY m.date DESC, mo.motion_index`, councillor, term)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var votes []CouncillorVoteRow
-	for rows.Next() {
-		var v CouncillorVoteRow
-		if err := rows.Scan(&v.MotionID, &v.MeetingID, &v.Date, &v.AgendaItem, &v.Summary,
-			&v.Position, &v.Result, &v.YeaCount, &v.NayCount); err != nil {
-			return nil, err
-		}
-		votes = append(votes, v)
-	}
-	return votes, rows.Err()
-}
-
 // VoteMatrixMotion is a column header in the vote matrix.
 type VoteMatrixMotion struct {
 	ID           int64

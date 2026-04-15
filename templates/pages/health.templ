@@ -2,14 +2,42 @@ package pages
 
 import (
 	"fmt"
+	"strings"
 
 	"thundercitizen/internal/views"
 	"thundercitizen/templates"
 	"thundercitizen/templates/components"
 )
 
+// shortCommit renders the first 7 chars of a commit SHA for compact display.
+// The full SHA stays in the link's href and title attributes.
+func shortCommit(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
+}
+
+// ghcrPackageURL returns the GHCR package page URL for a ghcr.io image
+// reference, or "" if the image is not a recognizable GHCR path.
+func ghcrPackageURL(image string) string {
+	const prefix = "ghcr.io/"
+	if !strings.HasPrefix(image, prefix) {
+		return ""
+	}
+	rest := image[len(prefix):]
+	if i := strings.IndexByte(rest, ':'); i >= 0 {
+		rest = rest[:i]
+	}
+	parts := strings.SplitN(rest, "/", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	return "https://github.com/" + parts[0] + "/" + parts[1] + "/pkgs/container/" + parts[1]
+}
+
 templ Health(vm views.HealthViewModel) {
-	@templates.Layout("Health") {
+	@templates.Layout("Health", "Thunder Citizen system health and data freshness status.") {
 		@components.PageHeader(components.PageHeaderProps{
 			Title: "Health",
 		})
@@ -17,14 +45,22 @@ templ Health(vm views.HealthViewModel) {
 		@components.Card(components.CardProps{Title: "Running image"}) {
 			<dl class="hc-boot-badge">
 				<dt>Image</dt>
-				<dd><code>{ vm.Image }</code></dd>
+				<dd>
+					if ghcrPackageURL(vm.Image) != "" {
+						<a href={ templ.SafeURL(ghcrPackageURL(vm.Image)) } target="_blank" rel="noopener">
+							<code>{ vm.Image }</code>
+						</a>
+					} else {
+						<code>{ vm.Image }</code>
+					}
+				</dd>
 				<dt>Commit</dt>
 				<dd>
 					if vm.Commit == "dev" || vm.Commit == "" {
 						<code>dev</code>
 					} else {
-						<a href={ templ.SafeURL("https://github.com/eric-decompiled/ThunderCitizen/commit/" + vm.Commit) } target="_blank" rel="noopener">
-							<code>{ vm.Commit }</code>
+						<a href={ templ.SafeURL("https://github.com/eric-decompiled/ThunderCitizen/commit/" + vm.Commit) } target="_blank" rel="noopener" title={ vm.Commit }>
+							<code>{ shortCommit(vm.Commit) }</code>
 						</a>
 					}
 				</dd>
@@ -156,6 +192,42 @@ templ Health(vm views.HealthViewModel) {
 						}
 					</g>
 				</svg>
+			}
+		}
+
+		if len(vm.GTFSFeeds) > 0 {
+			@components.Card(components.CardProps{Title: "GTFS realtime feeds"}) {
+				<table class="hc-feeds-table">
+					<thead>
+						<tr>
+							<th scope="col">Feed</th>
+							<th scope="col">Status</th>
+							<th scope="col" class="hc-num">Poll</th>
+							<th scope="col">Last success</th>
+							<th scope="col">Feed time</th>
+							<th scope="col" class="hc-num">OK</th>
+							<th scope="col" class="hc-num">Err</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, f := range vm.GTFSFeeds {
+							<tr>
+								<td>{ f.Name }</td>
+								<td><span class={ "hc-feed-badge", "hc-feed-badge-" + f.Status }>{ f.StatusLabel }</span></td>
+								<td class="hc-num"><code>{ f.Interval }</code></td>
+								<td><code>{ f.LastSuccessLabel }</code></td>
+								<td><code>{ f.LastFeedTSLabel }</code></td>
+								<td class="hc-num">{ fmt.Sprint(f.SuccessCount) }</td>
+								<td class="hc-num">{ fmt.Sprint(f.ErrorCount) }</td>
+							</tr>
+							if f.LastError != "" {
+								<tr class="hc-feed-error-row">
+									<td colspan="7"><small>{ f.LastError }</small></td>
+								</tr>
+							}
+						}
+					</tbody>
+				</table>
 			}
 		}
 	}

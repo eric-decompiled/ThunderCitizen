@@ -1,24 +1,5 @@
 package views
 
-import "strings"
-
-// CouncillorSlug creates a URL-safe slug from a councillor name (lowercase last name, no punctuation).
-func CouncillorSlug(name string) string {
-	parts := strings.Fields(name)
-	if len(parts) == 0 {
-		return ""
-	}
-	last := strings.ToLower(parts[len(parts)-1])
-	// Remove apostrophes and other punctuation
-	slug := strings.Map(func(r rune) rune {
-		if r >= 'a' && r <= 'z' {
-			return r
-		}
-		return -1
-	}, last)
-	return slug
-}
-
 // Initials returns the first letter of each word in name (max 2 letters)
 func Initials(name string) string {
 	if len(name) < 2 {

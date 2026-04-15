@@ -20,6 +20,7 @@ import (
 	"thundercitizen/internal/database"
 	"thundercitizen/internal/httperr"
 	"thundercitizen/internal/logger"
+	"thundercitizen/internal/transit"
 	"thundercitizen/internal/views"
 	"thundercitizen/templates/pages"
 )
@@ -33,8 +34,9 @@ var (
 )
 
 type Handlers struct {
-	db     *pgxpool.Pool
-	ledger *budget.Ledger
+	db       *pgxpool.Pool
+	ledger   *budget.Ledger
+	recorder *transit.Recorder
 }
 
 type councilStore interface {
@@ -43,7 +45,6 @@ type councilStore interface {
 	CouncillorNotableVotesAll(ctx context.Context, term string) (map[string][]council.CouncillorNotableVote, error)
 	HeadlineVotes(ctx context.Context, term string) ([]council.HeadlineVote, error)
 	VoteMatrix(ctx context.Context, term string) ([]council.VoteMatrixMotion, []council.VoteMatrixRecord, error)
-	CouncillorVotingRecord(ctx context.Context, councillor, term string) ([]council.CouncillorVoteRow, error)
 	MotionStats(ctx context.Context, term string) (int, int, int, error)
 	SearchMotions(ctx context.Context, f council.MotionFilter) ([]council.MotionRow, int, error)
 	GetMeetingByID(ctx context.Context, id string) (*council.MeetingDetail, error)
@@ -55,8 +56,8 @@ var newCouncilStore = func(db *pgxpool.Pool) councilStore {
 	return council.NewStore(db)
 }
 
-func New(db *pgxpool.Pool) *Handlers {
-	return &Handlers{db: db, ledger: budget.NewLedger(db)}
+func New(db *pgxpool.Pool, recorder *transit.Recorder) *Handlers {
+	return &Handlers{db: db, ledger: budget.NewLedger(db), recorder: recorder}
 }
 
 // renderPage sends the HTMX partial if the request is an HX-Request, otherwise the full page.
@@ -161,43 +162,6 @@ func (h *Handlers) Councillors(w http.ResponseWriter, r *http.Request) {
 	vm := views.NewCouncillorsViewModel(termYear, vd)
 
 	renderPage(w, r, pages.CouncillorsPartial(vm), pages.Councillors(vm))
-}
-
-func (h *Handlers) CouncillorProfile(w http.ResponseWriter, r *http.Request) {
-	slug := r.PathValue("slug")
-	if slug == "" {
-		httperr.BadRequest(w, "missing councillor")
-		return
-	}
-
-	c, termYear, found := data.FindCouncillorBySlug(slug)
-	if !found {
-		h.NotFound(w, r)
-		return
-	}
-
-	term := data.TermRange(termYear)
-	store := newCouncilStore(h.db)
-	ctx := r.Context()
-
-	voteStats, err := store.CouncillorVoteStatsAll(ctx, term)
-	if err != nil {
-		httperr.Internal(w, err)
-		return
-	}
-	notableVotes, err := store.CouncillorNotableVotesAll(ctx, term)
-	if err != nil {
-		httperr.Internal(w, err)
-		return
-	}
-	voteRecord, err := store.CouncillorVotingRecord(ctx, c.Name, term)
-	if err != nil {
-		httperr.Internal(w, err)
-		return
-	}
-
-	vm := views.NewCouncillorPageViewModel(c, termYear, voteStats, notableVotes, voteRecord)
-	pages.CouncillorProfile(vm).Render(ctx, w)
 }
 
 func (h *Handlers) About(w http.ResponseWriter, r *http.Request) {
@@ -352,9 +316,10 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", cache.Live)
 		vm := views.NewHealthViewModel(
-			valueOr(os.Getenv("TC_IMAGE"), "local-dev"),
+			valueOr(os.Getenv("TC_IMAGE"), "ghcr.io/eric-decompiled/thundercitizen:latest"),
 			Commit,
 			BuildTime,
+			h.recorder.Snapshot(),
 		)
 		pages.Health(vm).Render(r.Context(), w)
 	default:

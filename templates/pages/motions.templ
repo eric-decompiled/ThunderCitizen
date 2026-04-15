@@ -8,7 +8,7 @@ import (
 )
 
 templ Council(vm views.CouncilViewModel) {
-	@templates.Layout("Minutes") {
+	@templates.Layout("Minutes", "Every Thunder Bay city council meeting, searchable — motion summaries, recorded votes, and headline decisions from each session.") {
 		@components.YearSelector(components.YearSelectorProps{
 			Years:     []int{2022},
 			Current:   vm.Filter.TermYear,
@@ -274,7 +274,7 @@ templ motionSearchResult(m views.MotionSearchRow) {
 			}
 		</details>
 		<footer class="motion-meta">
-			<small>Moved by <a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(m.MovedBy)) }>{ m.MovedBy }</a> · Seconded by <a href={ templ.SafeURL("/councillors/" + views.CouncillorSlug(m.SecondedBy)) }>{ m.SecondedBy }</a></small>
+			<small>Moved by { m.MovedBy } · Seconded by { m.SecondedBy }</small>
 		</footer>
 	</article>
 }

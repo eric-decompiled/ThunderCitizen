@@ -26,7 +26,7 @@ templ spendingFooter() {
 }
 
 templ Budget(vm views.BudgetViewModel) {
-	@templates.Layout("Budget") {
+	@templates.Layout("Budget", "Thunder Bay's operating budget, visualized — trace where property tax dollars flow, by department and service.") {
 		@components.YearSelector(components.YearSelectorProps{
 			Years:      vm.Years,
 			Current:    vm.Year,
@@ -37,8 +37,8 @@ templ Budget(vm views.BudgetViewModel) {
 		<div id="budget-content">
 			@BudgetPartial(vm)
 		</div>
-		<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-		<script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3"></script>
+		<script src={ assets.URL("/static/vendor/d3.min.js") }></script>
+		<script src={ assets.URL("/static/vendor/d3-sankey.min.js") }></script>
 		<script src={ assets.URL("/static/budget/budget-sankey.js") }></script>
 	}
 }
@@ -72,11 +72,16 @@ templ BudgetPartial(vm views.BudgetViewModel) {
 					}
 				}
 			</div>
+			@components.Card(components.CardProps{Title: "Operating Budget"}) {
+				<p class="budget-sankey-note">
+					Sankey diagram mapping revenue to services. Flows assume a proportional split, except where revenue is earmarked (e.g. transit fares → transit).
+				</p>
+				<p class="budget-source-note">
+					Source: <a href="https://www.thunderbay.ca/en/city-hall/resources/Budget/Original-2026-Budget---Operating-Budget-Final.pdf" target="_blank" rel="noopener">City of Thunder Bay — 2026 Operating Budget</a>.
+				</p>
+			}
 			<div class="budget-flow-view">
 				<article class="term-panel budget-sankey-panel">
-					<header class="term-panel-header">
-						<h2 class="term-panel-title">Operating Budget</h2>
-					</header>
 					<div class="sankey-viewport">
 						<div id="sankey-slider" class="sankey-slider">
 							<div id="sankey-chart" class="sankey-chart"></div>
@@ -100,11 +105,6 @@ templ BudgetPartial(vm views.BudgetViewModel) {
 					}
 				</div>
 			}
-			<article class="budget-source-footer">
-				<p class="budget-source-note">
-					Source: <a href="https://www.thunderbay.ca/en/city-hall/resources/Budget/Original-2026-Budget---Operating-Budget-Final.pdf" target="_blank" rel="noopener">City of Thunder Bay — 2026 Operating Budget</a>.
-				</p>
-			</article>
 	}
 	@templ.JSONScript("sankey-data", vm.Sankey)
 	@templ.JSONScript("service-details", vm.ServiceDetails)

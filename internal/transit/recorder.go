@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -11,6 +13,88 @@ import (
 
 	"thundercitizen/internal/logger"
 )
+
+// FeedStats is a point-in-time snapshot of one GTFS-RT feed's polling
+// health. Values are captured in memory only — durability isn't needed,
+// the /health page just wants proof that data is still flowing.
+type FeedStats struct {
+	FeedType      string        // "vehicles" | "trips" | "alerts"
+	Interval      time.Duration // expected poll cadence
+	LastAttemptAt time.Time     // UTC, wall-clock of last poll attempt
+	LastSuccessAt time.Time     // UTC, wall-clock of last successful fetch
+	LastErrorAt   time.Time     // UTC, wall-clock of last failed fetch
+	LastError     string        // message from the last failure (empty if none)
+	LastFeedTS    time.Time     // feed's own header timestamp (upstream freshness)
+	SuccessCount  uint64        // successful fetches since boot
+	ErrorCount    uint64        // failed fetches since boot
+}
+
+// recorderStats is the in-memory tracker behind Recorder.Snapshot. Writes
+// are frequent (once per poll) but cheap — single map[string]*FeedStats
+// under an RWMutex. Snapshot returns a value-copy slice so callers can
+// read without holding the lock.
+type recorderStats struct {
+	mu    sync.RWMutex
+	feeds map[string]*FeedStats
+}
+
+func newRecorderStats() *recorderStats {
+	return &recorderStats{feeds: map[string]*FeedStats{}}
+}
+
+func (rs *recorderStats) init(feedType string, interval time.Duration) {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	rs.feeds[feedType] = &FeedStats{FeedType: feedType, Interval: interval}
+}
+
+func (rs *recorderStats) record(feedType string, feedTS time.Time, err error) {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	f, ok := rs.feeds[feedType]
+	if !ok {
+		return
+	}
+	now := time.Now().UTC()
+	f.LastAttemptAt = now
+	if err != nil {
+		f.LastErrorAt = now
+		f.LastError = err.Error()
+		f.ErrorCount++
+		return
+	}
+	f.LastSuccessAt = now
+	f.LastError = ""
+	f.SuccessCount++
+	if !feedTS.IsZero() {
+		f.LastFeedTS = feedTS
+	}
+}
+
+func (rs *recorderStats) snapshot() []FeedStats {
+	rs.mu.RLock()
+	defer rs.mu.RUnlock()
+	out := make([]FeedStats, 0, len(rs.feeds))
+	for _, f := range rs.feeds {
+		out = append(out, *f)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return feedOrder(out[i].FeedType) < feedOrder(out[j].FeedType)
+	})
+	return out
+}
+
+func feedOrder(t string) int {
+	switch t {
+	case "vehicles":
+		return 0
+	case "trips":
+		return 1
+	case "alerts":
+		return 2
+	}
+	return 99
+}
 
 var recorderLog = logger.New("recorder")
 
@@ -32,6 +116,7 @@ type Recorder struct {
 	client  *Client
 	tracker *vehicleTracker
 	trips   *TripCache
+	stats   *recorderStats
 }
 
 // NewRecorder creates a recorder with the given database pool. The trip cache
@@ -44,7 +129,18 @@ func NewRecorder(db *pgxpool.Pool) *Recorder {
 		client:  NewClient(),
 		tracker: newVehicleTracker(db),
 		trips:   NewTripCache(db),
+		stats:   newRecorderStats(),
 	}
+}
+
+// Snapshot returns a point-in-time copy of per-feed polling health.
+// Safe to call while pollers are running; returns nil on a nil receiver
+// so handlers don't have to special-case tests with no recorder wired.
+func (r *Recorder) Snapshot() []FeedStats {
+	if r == nil || r.stats == nil {
+		return nil
+	}
+	return r.stats.snapshot()
 }
 
 // Start launches background goroutines for each feed plus the trip cache
@@ -93,6 +189,7 @@ type recordFunc func(ctx context.Context) (feedTS time.Time, err error)
 
 func (r *Recorder) pollLoop(ctx context.Context, feedType string, interval time.Duration, record recordFunc) {
 	recorderLog.Info("polling", "feed", feedType, "interval", interval)
+	r.stats.init(feedType, interval)
 
 	// Initial delay to let the server warm up
 	select {
@@ -121,6 +218,7 @@ func (r *Recorder) pollLoop(ctx context.Context, feedType string, interval time.
 
 func (r *Recorder) fetchAndRecord(ctx context.Context, feedType string, interval time.Duration, record recordFunc) error {
 	feedTS, err := record(ctx)
+	r.stats.record(feedType, feedTS, err)
 	if err != nil {
 		return fmt.Errorf("record: %w", err)
 	}

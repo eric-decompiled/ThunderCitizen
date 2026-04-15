@@ -3,7 +3,6 @@ package data
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"thundercitizen/internal/models"
 )
@@ -47,44 +46,6 @@ func AvailableTerms() []int {
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(years)))
 	return years
-}
-
-// FindCouncillorBySlug looks up a councillor by URL slug (lowercased last name, no punctuation).
-// Returns the councillor, the election year, and true if found.
-func FindCouncillorBySlug(slug string) (models.Councillor, int, bool) {
-	for _, year := range AvailableTerms() {
-		term := CouncilByTerm[year]
-		if slugMatch(term.Mayor.Name, slug) {
-			return term.Mayor, year, true
-		}
-		for _, c := range term.AtLarge {
-			if slugMatch(c.Name, slug) {
-				return c, year, true
-			}
-		}
-		for _, c := range term.Ward {
-			if slugMatch(c.Name, slug) {
-				return c, year, true
-			}
-		}
-	}
-	return models.Councillor{}, 0, false
-}
-
-func slugMatch(name, slug string) bool {
-	parts := strings.Fields(name)
-	if len(parts) == 0 {
-		return false
-	}
-	last := strings.ToLower(parts[len(parts)-1])
-	// Remove non-alpha characters
-	clean := strings.Map(func(r rune) rune {
-		if r >= 'a' && r <= 'z' {
-			return r
-		}
-		return -1
-	}, last)
-	return clean == slug
 }
 
 var electionLabels = map[int]string{

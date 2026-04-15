@@ -37,7 +37,7 @@ templ RouteScheduleTodayPartial(vm transit.RouteViewModel) {
 }
 
 templ Route(vm transit.RouteViewModel) {
-	@templates.Layout(fmt.Sprintf("Route %s %s", vm.ShortName, vm.LongName)) {
+	@templates.Layout(fmt.Sprintf("Route %s %s", vm.ShortName, vm.LongName), fmt.Sprintf("Route %s %s — Thunder Bay Transit timetable, daily cancellations, and schedule-vs-actual performance.", vm.ShortName, vm.LongName)) {
 		@components.TransitNav(components.TransitNavProps{Current: "routes"})
 		<p class="route-back"><a href="/transit/routes">&lsaquo; All Routes</a></p>
 		@routeHeader(vm.ShortName, vm.LongName, vm.Color, vm.TextColor)

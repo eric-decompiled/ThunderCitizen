@@ -11,8 +11,8 @@
 // exists, the report includes a Δ Avg column showing regressions (+) and
 // improvements (-) against the last run.
 //
-// Routes are auto-discovered: councillor slugs from image paths, transit
-// route IDs from /api/transit/routes, minutes IDs from page links.
+// Routes are auto-discovered: transit route IDs from /api/transit/routes,
+// minutes IDs from page links.
 package main
 
 import (
@@ -78,11 +78,10 @@ func main() {
 	resp.Body.Close()
 
 	// Discover parameterized route values from running server.
-	slugs := discoverCouncillors(*base)
 	routeIDs := discoverRouteIDs(*base)
 	minutesID := discoverMinutesID(*base)
 
-	routes := buildRoutes(slugs, routeIDs, minutesID)
+	routes := buildRoutes(routeIDs, minutesID)
 
 	// Load previous record for delta comparison.
 	prev := loadLatestRecord()
@@ -127,7 +126,7 @@ func main() {
 	}
 }
 
-func buildRoutes(slugs []string, routeIDs []string, minutesID string) []route {
+func buildRoutes(routeIDs []string, minutesID string) []route {
 	routes := []route{
 		// --- App pages ---
 		{"Pages", "/"},
@@ -137,11 +136,6 @@ func buildRoutes(slugs []string, routeIDs []string, minutesID string) []route {
 		{"Pages", "/about"},
 		{"Pages", "/health"},
 		{"Pages", "/version"},
-	}
-
-	// Councillor profiles (sampled)
-	for _, s := range slugs {
-		routes = append(routes, route{"Pages", "/councillors/" + s})
 	}
 
 	// Minutes detail
@@ -395,47 +389,6 @@ func loadLatestRecord() *record {
 }
 
 // --- Discovery helpers: fetch real IDs from the running server ---
-
-func discoverCouncillors(base string) []string {
-	body := fetchBody(base + "/councillors")
-	if body == "" {
-		return nil
-	}
-	// Extract slugs from image paths like /councillors/boshcoff.jpg
-	seen := map[string]bool{}
-	var slugs []string
-	for _, part := range strings.Split(body, "/councillors/") {
-		if len(slugs) >= 3 {
-			break
-		}
-		// Strip file extension if present.
-		end := strings.IndexAny(part, `"' >?`)
-		if end <= 0 || end > 40 {
-			continue
-		}
-		name := part[:end]
-		if dot := strings.IndexByte(name, '.'); dot > 0 {
-			name = name[:dot]
-		}
-		if isAlphaSlug(name) && !seen[name] {
-			seen[name] = true
-			slugs = append(slugs, name)
-		}
-	}
-	return slugs
-}
-
-func isAlphaSlug(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	for _, c := range s {
-		if (c < 'a' || c > 'z') && c != '-' {
-			return false
-		}
-	}
-	return true
-}
 
 func discoverRouteIDs(base string) []string {
 	body := fetchBody(base + "/api/transit/routes")

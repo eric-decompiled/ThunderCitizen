@@ -9,7 +9,7 @@ import (
 )
 
 templ NotFound(vm views.NotFoundViewModel) {
-	@templates.Layout("Not Found") {
+	@templates.Layout("Not Found", "Page not found.") {
 		@components.PageHeader(components.PageHeaderProps{
 			Title: "404",
 		})
