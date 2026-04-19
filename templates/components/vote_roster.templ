@@ -1,6 +1,18 @@
 package components
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
+
+// lastName returns the final whitespace-separated token of a full name.
+func lastName(full string) string {
+	parts := strings.Fields(full)
+	if len(parts) == 0 {
+		return full
+	}
+	return parts[len(parts)-1]
+}
 
 // VoterChip is one councillor in a vote roster row.
 type VoterChip struct {
@@ -64,7 +76,7 @@ templ voteRosterStrip(kind, label string, chips []VoterChip) {
 					} else {
 						<span class="vote-roster-avatar vote-roster-avatar--initials" aria-hidden="true">{ c.Initials }</span>
 					}
-					<span class="vote-roster-name">{ c.Name }</span>
+					<span class="vote-roster-name">{ lastName(c.Name) }</span>
 				</div>
 			}
 		</div>

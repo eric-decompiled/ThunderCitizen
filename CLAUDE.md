@@ -64,9 +64,9 @@ type MapProps struct {
 
 ### Palettes
 
-**Light (Solarized, contrast-corrected):** cream bg `#fdf6e3`, brown-grey text scale, dark olive-green accent `#4a6100` (6.4:1 on cream, 5.2:1 on `--term-bg-deep`). Body text `#475b65` (6.6:1). Status colors darkened for AA on cream.
+**Light (Fractured Stone — cool/ash):** three-tier stone hierarchy — page `#e1d9c9` (light stone), card body `#cfc7b5` (mid stone), nav/strip/footer `#beb5a1` (deep stone). Solarized blue `#155a8a` for interactive affordances (links, buttons, focus) and deeper `#0b4670` for headings/terminal labels — both darkened from prior cream-palette values so AA holds on the deeper surfaces. Muted text collapsed onto `#3d5560` so small/citation text passes AA on card and strip.
 
-**Dark (Green Phosphor):** near-black green bg `#0d1a0d`, phosphor green text `#4ade80` (10.3:1), bright green accent. CRT scanlines on header, green glow on title.
+**Dark (Green Phosphor):** near-black green bg `#0d1a0d` (page), `#141e14` (card, lifted above page per Material-Dark elevation convention), `#0a100a` (strip/nav/footer, deepest). Phosphor green text `#4ade80` (10.3:1). Nav + site footer carry a phosphor-green halo box-shadow (`--strip-edge-glow-below/-above`) so they frame visibly against the near-black tiers. Headings collapse onto `--accent` — single-phosphor CRT vibe. CRT scanlines on header, green glow on title.
 
 Dark mode is defined via `@mixin dark-theme` applied to both `@media (prefers-color-scheme: dark)` and `:root[data-theme="dark"]`. Console helper: `toggleTheme()` / `toggleTheme("dark")` / `toggleTheme("light")`.
 
@@ -75,7 +75,10 @@ Dark mode is defined via `@mixin dark-theme` applied to both `@media (prefers-co
 | Variable | Light | Dark | Purpose |
 |----------|-------|------|---------|
 | `--thunder-900` to `--thunder-50` | Solarized grey scale | Green phosphor scale | Text/bg hierarchy (flips) |
-| `--accent` | `#4a6100` (olive green) | `#4ade80` (phosphor) | Headings, links, buttons |
+| `--accent` | `#4a6100` (olive green) | `#4ade80` (phosphor) | Interactive affordances: links, buttons, focus rings |
+| `--heading` | `#155a8a` (Solarized blue, darkened) | `var(--accent)` — phosphor green | h1/h2/h3 + terminal-label family. Light uses classic Solarized blue; dark collapses onto --accent so the green-phosphor CRT look stays unified |
+| `--heading-glow` | `none` | `none` | Reserved for optional heading text-shadow; currently unused |
+| `--heading-warm` | `#7a3f0a` (darkened Solarized orange) | `var(--accent)` — phosphor green | Scoped warm-accent variant. Applied via `.home article > header` to give home-page card header bars a rust/amber tone against the beige strip. Dark mode collapses onto --accent so the phosphor look stays unified |
 | `--term-*` tokens | Solarized values | Phosphor values | Semantic terminal tokens (bg, fg, border, glow) |
 | `--surface-dark` | `#002b36` | `#0a100a` | Header/footer background |
 | `--status-ok/warn/error/info/early-dep/muted` | Darkened for AA on cream | Bright for dark bg | Status semantics |
@@ -85,9 +88,9 @@ Dark mode is defined via `@mixin dark-theme` applied to both `@media (prefers-co
 
 **Monospace default** via `--pico-font-family: var(--font-mono)`. Everything inherits mono.
 
-**Prose carve-outs** use `font-family: var(--font-prose)` for long-form text only: `.lead`, `.motion-text`, `.motion-modal-summary`, `.motion-heading`, `.motion-agenda-item`, `.sankey-detail-body p`, `.report-methodology p`.
+**Prose carve-outs** use `font-family: var(--font-prose)` for long-form text only: `.lead`, `.motion-text`, `.motion-heading`, `.motion-agenda-item`, `.sankey-detail-body p`, `.report-methodology p`, `.councillor-bio`.
 
-**Headings** are terminal labels: all `0.72rem`, uppercase, `letter-spacing: 0.08em`, `color: var(--accent)`. Weight is the hierarchy lever: h1=800, h2=700, h3=600.
+**Headings** are terminal labels: all `0.72rem`, uppercase, `letter-spacing: 0.08em`, `color: var(--heading)` (brown in light, amber in dark). Weight is the hierarchy lever: h1=800, h2=700, h3=600. `--accent` is reserved for interactive affordances (links, buttons, focus) — never use it for heading text.
 
 ### Accessing theme colors
 

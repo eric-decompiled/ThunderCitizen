@@ -181,7 +181,7 @@ templ routeScheduleBody(vm transit.RouteViewModel) {
 											<td class="route-tp-empty"></td>
 											<td class="route-tp-empty"></td>
 										} else if trip.Canceled {
-											<td class="route-tp-canceled"><s>{ trip.Stops[idx].ScheduledTime }</s></td>
+											<td class="route-tp-canceled">{ trip.Stops[idx].ScheduledTime }</td>
 											<td class="route-tp-canceled"></td>
 										} else if trip.Stops[idx].DelaySec == nil {
 											<td>{ trip.Stops[idx].ScheduledTime }</td>
@@ -203,7 +203,6 @@ templ routeScheduleBody(vm transit.RouteViewModel) {
 		}
 		<div class="route-tp-footer">
 			<p class="route-tp-note">On-time window: 1 min early to 5 min late. Actuals are best-effort estimates from GTFS-RT.</p>
-			<a href={ templ.SafeURL("/transit/audit/deltas/" + vm.RouteID + "?date=" + vm.DateISO) } class="route-tp-audit-link">position audit</a>
 		</div>
 		@timetableHeaderSync()
 	} else if len(vm.Trips) == 0 {

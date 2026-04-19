@@ -20,7 +20,7 @@
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--accent);
+  color: var(--heading);
 }
 
 // ==========================================================================
@@ -83,7 +83,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--accent);
+    color: var(--heading);
     padding: 0.25rem 0.5rem;
     border-bottom: 1px solid var(--glass-border);
     text-align: left;
@@ -96,6 +96,23 @@
     border-bottom: 1px solid var(--term-border);
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
+  }
+
+  @include respond-to('sm') {
+    th, td { padding: 0.2rem 0.35rem; }
+    td { line-height: 1.15; }
+    .route-table-id {
+      min-width: 1.4rem;
+      padding: 0.1rem 0.25rem;
+    }
+    // Hide Terminals column (col 8)
+    th:nth-child(8), td:nth-child(8) { display: none; }
+  }
+
+  @include respond-to('xs') {
+    // Also hide EWT (col 6) and Cv (col 7)
+    th:nth-child(6), td:nth-child(6),
+    th:nth-child(7), td:nth-child(7) { display: none; }
   }
 }
 
@@ -272,7 +289,7 @@
   font-size: 0.6rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--term-accent-dim);
+  color: var(--term-fg);
 }
 
 .terminal-time {
@@ -1191,7 +1208,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--accent);
+  color: var(--heading);
 }
 
 .transit-status {
@@ -1292,11 +1309,12 @@
   border-left: 5px solid;
   border-radius: 3px;
   background: var(--term-bg-deep);
+  box-shadow: var(--card-shadow);
   font-family: inherit;
   min-width: 0;
   font-size: 0.75rem;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   line-height: 1.3;
   color: var(--term-fg);
   position: relative;
@@ -1307,6 +1325,8 @@
 
   &:hover {
     background: var(--term-bg);
+    box-shadow: var(--card-shadow-hover);
+    transform: translateY(-1px);
   }
 
   &:focus-visible {
@@ -1846,7 +1866,7 @@
 .route-tp-direction-label {
   font-size: 0.6rem;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--heading);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   padding: 0.5rem 0 0.25rem;
@@ -1987,10 +2007,11 @@ tr.route-tp-canceled {
     left: 0;
     right: 0;
     top: 50%;
-    height: 1px;
-    background: var(--accent);
-    opacity: 0.5;
+    height: 2px;
+    background: var(--status-error);
+    opacity: 0.7;
     pointer-events: none;
+    z-index: 2;
   }
 }
 
@@ -2036,7 +2057,7 @@ tr.route-tp-canceled {
   line-height: 1.5;
 
   strong {
-    color: var(--accent);
+    color: var(--heading);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-size: 0.65rem;
@@ -2152,7 +2173,7 @@ tr.route-tp-canceled {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--accent);
+    color: var(--heading);
   }
 }
 
@@ -2163,7 +2184,7 @@ tr.route-tp-canceled {
   color: var(--thunder-600);
 
   strong {
-    color: var(--accent);
+    color: var(--heading);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-size: 0.65rem;
@@ -2746,7 +2767,7 @@ tr.route-tp-canceled {
 .kpi-pct-label {
   font-size: 0.5rem;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--heading);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }

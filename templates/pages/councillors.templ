@@ -9,6 +9,19 @@ import (
 	"thundercitizen/templates/components"
 )
 
+// lastFirst reformats "Albert Aiello" as "Aiello, Albert" so the
+// vote-matrix photo labels reveal the distinguishing surname first and
+// truncate the given name when cramped. Middle tokens stay with the given.
+func lastFirst(full string) string {
+	parts := strings.Fields(full)
+	if len(parts) < 2 {
+		return full
+	}
+	last := parts[len(parts)-1]
+	given := strings.Join(parts[:len(parts)-1], " ")
+	return last + ", " + given
+}
+
 func statusBadgeClass(status string) string {
 	if status != "" {
 		return "badge-muted"
@@ -155,7 +168,7 @@ templ wardCouncillorItem(c views.CouncillorView) {
 		BadgeURL:   c.StatusURL,
 		WardName:   c.Position,
 	}) {
-		<p>{ c.Summary }</p>
+		<p class="councillor-bio">{ c.Summary }</p>
 		@councillorVoteStats(c)
 	}
 }
@@ -173,7 +186,7 @@ templ councillorItem(c views.CouncillorView) {
 		BadgeClass: statusBadgeClass(c.Status),
 		BadgeURL:   c.StatusURL,
 	}) {
-		<p>{ c.Summary }</p>
+		<p class="councillor-bio">{ c.Summary }</p>
 		@councillorVoteStats(c)
 	}
 }
@@ -208,7 +221,7 @@ templ voteMatrix(vm *views.VoteMatrixViewModel) {
 								</tr>
 							}
 							<tr
-								data-motion-title={ col.FullTitle }
+								data-motion-title={ col.Label }
 								data-motion-summary={ col.Summary }
 								data-motion-date={ col.Date }
 								data-motion-result={ col.Result }
@@ -223,7 +236,7 @@ templ voteMatrix(vm *views.VoteMatrixViewModel) {
 										<span class="vote-matrix-result-badge vote-matrix-result--carried">Carried</span>
 									}
 									if col.MediaURL != "" {
-										<a href={ templ.SafeURL(col.MediaURL) } target="_blank" rel="noopener" class="vote-matrix-media-badge" title="Press coverage">TBNews <span class="ext-link-icon" aria-hidden="true"></span></a>
+										<span class="vote-matrix-media-badge" title="Press coverage">TBNews</span>
 									}
 								</td>
 								<th class="vote-matrix-motion" scope="row">
@@ -270,7 +283,7 @@ templ voteMatrixMobile(vm *views.VoteMatrixViewModel) {
 			}
 			<div
 				class="vote-matrix-card"
-				data-motion-title={ col.FullTitle }
+				data-motion-title={ col.Label }
 				data-motion-summary={ col.Summary }
 				data-motion-date={ col.Date }
 				data-motion-result={ col.Result }
@@ -279,16 +292,16 @@ templ voteMatrixMobile(vm *views.VoteMatrixViewModel) {
 				data-motion-id={ fmt.Sprintf("%d", col.MotionID) }
 			>
 				<div class="vote-matrix-card-top">
+					<span class="vote-matrix-card-label">{ col.Label }</span>
+				</div>
+				<div class="vote-matrix-card-bottom">
 					if col.Result == "Lost" || col.Result == "Tie" {
 						<span class={ "vote-matrix-result-badge", "vote-matrix-result--" + strings.ToLower(col.Result) }>{ col.Result }</span>
 					} else {
 						<span class="vote-matrix-result-badge vote-matrix-result--carried">Carried</span>
 					}
-					<span class="vote-matrix-card-label">{ col.Label }</span>
-				</div>
-				<div class="vote-matrix-card-bottom">
 					if col.MediaURL != "" {
-						<a href={ templ.SafeURL(col.MediaURL) } target="_blank" rel="noopener" class="vote-matrix-media-badge" title="Press coverage" onclick="event.stopPropagation()">TBNews <span class="ext-link-icon" aria-hidden="true"></span></a>
+						<span class="vote-matrix-media-badge" title="Press coverage">TBNews</span>
 					}
 					<span class="vote-matrix-card-tally">{ voteTally(vm.Rows, colIdx) }</span>
 				</div>
@@ -303,7 +316,7 @@ templ voteMatrixNamesRow(vm *views.VoteMatrixViewModel) {
 		<th class="vote-matrix-label"></th>
 		for _, row := range vm.Rows {
 			<th class="vote-matrix-councillor">
-				<span>{ row.Name }</span>
+				<span title={ row.Name }>{ lastFirst(row.Name) }</span>
 			</th>
 		}
 	</tr>
@@ -352,8 +365,13 @@ templ voteMatrixModal() {
 				<span id="vote-modal-result" class="motion-modal-result"></span>
 				<h3 id="vote-modal-title" class="motion-modal-title"></h3>
 			</div>
-			<p id="vote-modal-summary" class="motion-modal-summary"></p>
-			<div id="vote-modal-roster" class="motion-modal-roster"></div>
+			<div class="motion-modal-body">
+				<div id="vote-modal-summary-block" class="motion-modal-summary-block">
+					<span class="motion-modal-summary-label">Summary</span>
+					<p id="vote-modal-summary" class="motion-modal-summary"></p>
+				</div>
+				<div id="vote-modal-roster" class="motion-modal-roster"></div>
+			</div>
 			<div class="motion-modal-footer">
 				<span id="vote-modal-date" class="motion-modal-date"></span>
 				<div class="motion-modal-actions">
@@ -380,11 +398,12 @@ templ voteMatrixModal() {
 			document.getElementById('vote-modal-title').textContent = title || summary;
 
 			var sumEl = document.getElementById('vote-modal-summary');
+			var sumBlock = document.getElementById('vote-modal-summary-block');
 			if (summary && summary !== title) {
 				sumEl.textContent = summary;
-				sumEl.style.display = '';
+				sumBlock.style.display = '';
 			} else {
-				sumEl.style.display = 'none';
+				sumBlock.style.display = 'none';
 			}
 
 			var resultEl = document.getElementById('vote-modal-result');

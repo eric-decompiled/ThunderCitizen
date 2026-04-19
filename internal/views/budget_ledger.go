@@ -112,6 +112,21 @@ var revenueEarmarks = map[string]string{
 	"revenue.housing_rents": "service.tbdssab_levy.community_housing_homelessness",
 }
 
+// subLedgerCreditRollups groups revenue codes under a different display code in
+// per-service drill-downs only. TbayTel dividends aren't earmarked to any
+// service, so attributing them per-service is misleading — fold into "Other
+// Revenue" for the drill-down. The top-level Sankey is unaffected.
+var subLedgerCreditRollups = map[string]struct{ Code, Name string }{
+	"revenue.tbaytel": {Code: "revenue.other", Name: "Other Revenue"},
+}
+
+func rollupCreditForSubLedger(code, name string) (string, string) {
+	if r, ok := subLedgerCreditRollups[code]; ok {
+		return r.Code, r.Name
+	}
+	return code, name
+}
+
 // buildServiceDrillDown builds the detail Sankey for a single service from tier-2 ledger entries.
 func buildServiceDrillDown(ctx context.Context, ledger *budget.Ledger, year int, svc budget.SankeyNode, parentFlows []budget.SankeyFlow) (ServiceSankeyJSON, error) {
 	detail := ServiceSankeyJSON{
@@ -130,6 +145,7 @@ func buildServiceDrillDown(ctx context.Context, ledger *budget.Ledger, year int,
 		val  float64 // millions
 	}
 	var revSources []revSource
+	seenCredit := map[string]int{} // rolled credit code → revSources index
 	for _, f := range parentFlows {
 		if f.DebitCode != svc.Code {
 			continue
@@ -138,15 +154,22 @@ func buildServiceDrillDown(ctx context.Context, ledger *budget.Ledger, year int,
 		if val < 0.05 {
 			continue
 		}
-		if _, exists := nodeIndex[f.CreditCode]; !exists {
-			nodeIndex[f.CreditCode] = len(detail.Nodes)
-			detail.Nodes = append(detail.Nodes, SankeyNode{Name: f.CreditName, Category: "funding"})
-			detail.Details[f.CreditName] = SankeyDetail{
-				Total: val,
-				Color: "#9B7D0D",
-			}
+		code, name := rollupCreditForSubLedger(f.CreditCode, f.CreditName)
+		if idx, ok := seenCredit[code]; ok {
+			revSources[idx].val += val
+			d := detail.Details[name]
+			d.Total += val
+			detail.Details[name] = d
+			continue
 		}
-		revSources = append(revSources, revSource{code: f.CreditCode, idx: nodeIndex[f.CreditCode], val: val})
+		nodeIndex[code] = len(detail.Nodes)
+		detail.Nodes = append(detail.Nodes, SankeyNode{Name: name, Category: "funding"})
+		detail.Details[name] = SankeyDetail{
+			Total: val,
+			Color: "#9B7D0D",
+		}
+		revSources = append(revSources, revSource{code: code, idx: nodeIndex[code], val: val})
+		seenCredit[code] = len(revSources) - 1
 	}
 
 	// Right nodes: sub-accounts

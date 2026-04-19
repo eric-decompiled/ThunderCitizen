@@ -169,10 +169,19 @@ $badge-hues: (
     --thunder-100: #141e14;  // card surface (lifted from deep bg)
     --thunder-50:  #0d1a0d;  // page bg
 
-    // Accent — phosphor green
+    // Accent — phosphor green. Reserved for interactives (links, buttons, focus).
     --accent: #4ade80;
     --accent-hover: #86efac;
     --accent-light: rgba(74, 222, 128, 0.15);
+
+    // Heading — in dark mode, collapse back onto the phosphor-green accent.
+    // The green-phosphor CRT vibe is the dark aesthetic; no dual-phosphor split.
+    --heading: var(--accent);
+    --heading-hover: var(--accent-hover);
+    --heading-glow: none;
+
+    // Hero phosphor — stays bright green in dark mode
+    --hero-fg: #4ade80;
 
     // Terminal semantic tokens
     --term-bg: #0d1a0d;
@@ -186,6 +195,10 @@ $badge-hues: (
     --term-border: rgba(74, 222, 128, 0.1);
     --term-glow: 0 0 8px rgba(74, 222, 128, 0.3);
     --term-scanline: rgba(0, 0, 0, 0.08);
+    // Phosphor halo for site header + footer — keeps strips framed even
+    // when the luminance gap between tiers is small.
+    --strip-edge-glow-below: 0 1px 0 rgba(74, 222, 128, 0.08), 0 4px 14px -8px rgba(74, 222, 128, 0.22);
+    --strip-edge-glow-above: 0 -1px 0 rgba(74, 222, 128, 0.08), 0 -4px 14px -8px rgba(74, 222, 128, 0.22);
 
     // Nav glow tokens (dark = phosphor bloom, chained like bolt logo)
     --nav-hover-filter:
@@ -203,9 +216,9 @@ $badge-hues: (
     --pico-muted-color: var(--thunder-500);
     --pico-muted-border-color: var(--thunder-200);
     --pico-table-row-stripped-background-color: color-mix(in srgb, var(--thunder-200) 40%, var(--thunder-50));
-    --pico-h1-color: var(--accent);
-    --pico-h2-color: var(--accent);
-    --pico-h3-color: var(--accent);
+    --pico-h1-color: var(--heading);
+    --pico-h2-color: var(--heading);
+    --pico-h3-color: var(--heading);
 
     // Card shadows — green phosphor glow
     --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 8px rgba(74, 222, 128, 0.05);

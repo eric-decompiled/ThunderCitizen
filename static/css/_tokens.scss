@@ -5,32 +5,49 @@
 @use "mixins" as *;
 
 :root {
-  // Grey scale — Solarized light (contrast-corrected)
+  // Grey scale — Solarized light shifted into "Fractured Stone" (ash/cool).
+  // Page / card / strip surfaces all live in stone-family with clear 3-tier
+  // hierarchy. Muted text darkened so citations stay AA on deeper surfaces.
   --thunder-900: #002b36;  // base03 — darkest text (13.9:1)
   --thunder-800: #073642;  // base02 — strong text (12.1:1)
-  --thunder-700: #2e4047;  // body text (9.2:1)
-  --thunder-600: #3d5560;  // secondary (7.0:1)
-  --thunder-500: #586e75;  // muted (5.0:1)
-  --thunder-400: #93a1a1;  // base1  — decorative (2.5:1)
-  --thunder-200: #d5c4a1;  // warm border
-  --thunder-100: #eee8d5;  // base2  — recessed surface
-  --thunder-50:  #fdf6e3;  // base3  — page background
+  --thunder-700: #2e4047;  // body text
+  --thunder-600: #3d5560;  // secondary
+  --thunder-500: #3d5560;  // muted — collapsed onto 600 so small/citation text stays AA on card/strip
+  --thunder-400: #8a9596;  // decorative (nudged cooler for stone palette)
+  --thunder-200: #b7a788;  // stone border (darker than card body so it reads)
+  --thunder-100: #cfc7b5;  // mid stone — card body surface
+  --thunder-50:  #e1d9c9;  // light stone — page background
 
-  // Accent — darkened solarized green (6.4:1 on cream, 5.2:1 on --term-bg-deep)
-  --accent: #4a6100;
-  --accent-hover: #3a4d00;
-  --accent-light: #f0f4c3;
+  // Accent — darkened Solarized blue for interactive affordances (links,
+  // buttons, focus rings). Dropped one step (was #1a6ca8) to hold AA on the
+  // deeper Fractured-Stone surfaces.
+  --accent: #155a8a;
+  --accent-hover: #0f4670;
+  --accent-light: #d5e5f0;
+
+  // Heading — deeper Solarized blue for h1/h2/h3 and the terminal-label
+  // family. Darkened (was #155a8a) so it stays AA on deep-stone strips.
+  --heading: #0b4670;
+  --heading-hover: #08385c;
+  --heading-glow: none;
 
   // Terminal semantic tokens (global)
-  --term-bg: #fdf6e3;
-  --term-bg-deep: #eae0c9;
+  --term-bg: #e1d9c9;
+  // Deep panel / strip surface — Fractured Stone deep layer (#beb5a1).
+  // Used for card headers & footers, panel bars, nav, site footer.
+  --term-bg-deep: #beb5a1;
   --term-fg: #475b65;
   --term-fg-bright: #073642;
   --term-fg-dim: #3d5560;
-  --term-accent: #4a6100;
-  --term-accent-bright: #3a4d00;
-  --term-accent-dim: #859900;
+  --term-accent: var(--accent);
+  --term-accent-bright: var(--accent-hover);
+  --term-accent-dim: #6ca6cf;
   --term-border: rgba(101, 123, 131, 0.15);
+  // Framed-strip glow tokens (used by site-header + site-footer). No-op in
+  // light — the stone palette already has enough luminance contrast for strips
+  // to read. Dark mode overrides these with phosphor halos (see dark-theme).
+  --strip-edge-glow-below: none;
+  --strip-edge-glow-above: none;
   --term-glow: none;
   --term-scanline: rgba(0, 0, 0, 0.02);
 
@@ -53,9 +70,9 @@
   --pico-muted-color: var(--thunder-500);
   --pico-muted-border-color: var(--thunder-200);
   --pico-table-row-stripped-background-color: #ede5cb;
-  --pico-h1-color: var(--accent);
-  --pico-h2-color: var(--accent);
-  --pico-h3-color: var(--accent);
+  --pico-h1-color: var(--heading);
+  --pico-h2-color: var(--heading);
+  --pico-h3-color: var(--heading);
 
   // Card shadows — warm solarized tint
   --card-shadow: 0 1px 3px rgba(0, 43, 54, 0.08), 0 1px 2px rgba(0, 43, 54, 0.06);
@@ -72,6 +89,11 @@
 
   // Dark surface (header/footer) — warm solarized brown
   --surface-dark: #2c2620;
+
+  // Hero / terminal-screen foreground. Always rendered over --surface-dark
+  // (a dark panel in both themes). Light theme uses a CRT-phosphor blue
+  // (~5.9:1 on #2c2620); dark theme keeps phosphor green (see dark-theme mixin).
+  --hero-fg: #60a5fa;
 
 
   // Status colors — darkened for AA on cream

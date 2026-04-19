@@ -94,14 +94,18 @@ h1, h2, h3 {
 
 h1, h2, h3 {
   font-size: 0.72rem;
-  color: var(--accent);
+  color: var(--heading);
+  text-shadow: var(--heading-glow);
 }
 
 h1 { font-weight: 800; }
 h2 { font-weight: 700; }
 h3 { font-weight: 600; }
 
-// Pico article card header — terminal bar style
+// Pico article card header — terminal bar style. Shares --term-bg-deep
+// (Solarized stone in light, near-black in dark) with nav + footers for a
+// unified strip surface. Stronger scanlines than the site default via a
+// locally bumped --term-scanline on the shared %term-scanlines overlay.
 article > header {
   padding: 0.4rem var(--pico-block-spacing-horizontal);
   border-bottom-width: 2px;
@@ -184,7 +188,7 @@ article > header {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--accent);
+  color: var(--heading);
 }
 
 .term-metric-note {
@@ -350,6 +354,7 @@ article > header {
   background: var(--term-bg-deep);
   padding: 0;
   border-bottom: 1px solid var(--term-border);
+  box-shadow: var(--strip-edge-glow-below);
   position: relative;
   @extend %term-scanlines;
 
@@ -561,11 +566,11 @@ article > header {
     flex-direction: column;
     gap: 0;
     padding: 0;
-    background: var(--glass-bg);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--glass-border);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    background: color-mix(in srgb, var(--term-bg-deep) 82%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    border-bottom: 1px solid color-mix(in srgb, var(--term-accent) 25%, transparent);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
     max-height: 0;
     overflow: hidden;
     opacity: 0;
@@ -601,6 +606,7 @@ article > header {
   text-align: center;
   margin-top: auto;
   border-top: 2px solid var(--term-border);
+  box-shadow: var(--strip-edge-glow-above);
   position: relative;
   @extend %term-scanlines;
   font-size: 0.7rem;
@@ -655,9 +661,12 @@ article > header {
 }
 
 .home-hero {
-  // Terminal screen — always phosphor green on dark
-  --hero-glow: 0 0 12px rgba(74, 222, 128, 0.4);
-  --hero-screen-glow: inset 0 0 60px rgba(74, 222, 128, 0.05);
+  // Terminal screen — phosphor-lit foreground on a dark surface.
+  // --hero-fg drives text + glow; light theme swaps to CRT blue, dark stays green.
+  --hero-glow: 0 0 12px color-mix(in srgb, var(--hero-fg) 40%, transparent);
+  --hero-screen-glow: inset 0 0 60px color-mix(in srgb, var(--hero-fg) 5%, transparent);
+  // Slightly stronger scanlines on the big dark terminal screen.
+  --term-scanline: rgba(255, 255, 255, 0.03);
 
   display: flex;
   flex-direction: column;
@@ -670,10 +679,12 @@ article > header {
     radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.25) 100%),
     var(--surface-dark);
   border-bottom: 2px solid var(--term-border);
+  border-radius: var(--radius-md);
+  overflow: clip;
   position: relative;
   @extend %term-scanlines;
   box-shadow: var(--hero-screen-glow);
-  color: #4ade80;
+  color: var(--hero-fg);
 
   h1 {
     font-size: 1.75rem;
@@ -683,7 +694,7 @@ article > header {
     background:
       linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)
         no-repeat -50% 0 / 50% 100%,
-      #4ade80;
+      var(--hero-fg);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -739,7 +750,7 @@ article > header {
     &.active {
       opacity: 1;
       transform: scale(1.15);
-      filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.6));
+      filter: drop-shadow(0 0 6px color-mix(in srgb, var(--hero-fg) 60%, transparent));
 
       // underline pip
       &::after {
@@ -760,13 +771,13 @@ article > header {
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) .home-hero {
-    --hero-glow: 0 0 15px rgba(74, 222, 128, 0.5);
-    --hero-screen-glow: inset 0 0 80px rgba(74, 222, 128, 0.05);
+    --hero-glow: 0 0 15px color-mix(in srgb, var(--hero-fg) 50%, transparent);
+    --hero-screen-glow: inset 0 0 80px color-mix(in srgb, var(--hero-fg) 5%, transparent);
   }
 }
 :root[data-theme="dark"] .home-hero {
-  --hero-glow: 0 0 15px rgba(74, 222, 128, 0.5);
-  --hero-screen-glow: inset 0 0 80px rgba(74, 222, 128, 0.05);
+  --hero-glow: 0 0 15px color-mix(in srgb, var(--hero-fg) 50%, transparent);
+  --hero-screen-glow: inset 0 0 80px color-mix(in srgb, var(--hero-fg) 5%, transparent);
 }
 
 .notice-welcome {
@@ -935,7 +946,14 @@ a.card-link {
 // Drop `HeroStats` component in any page; children (StatGrid etc.) get
 // scaled-up values in accent color.
 .hero-stats {
-  .stat-grid { gap: 0.75rem; }
+  .stat-grid {
+    gap: 0.75rem;
+
+    @media (max-width: 520px) {
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+    }
+  }
 
   .stat-value {
     font-size: var(--text-xl);
@@ -1255,12 +1273,19 @@ details.accordion-item {
   }
 
   .vote-matrix-result-cell {
-    width: 3.5rem;
-    text-align: center;
+    width: 5rem;
     vertical-align: middle;
-    padding: 0.2rem 0.15rem;
+    padding: 0.3rem 0.3rem;
 
-    .vote-matrix-media-badge { margin-top: 0.2rem; }
+    > .vote-matrix-result-badge,
+    > .vote-matrix-media-badge {
+      display: block;
+      width: max-content;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    > .vote-matrix-media-badge { margin-top: 0.3rem; }
   }
 
   .vote-matrix-date-row td {
@@ -1331,6 +1356,7 @@ details.accordion-item {
   @extend %badge-base;
   font-size: 0.55rem;
   text-align: center;
+  flex-shrink: 0;
 
   &.vote-matrix-result--carried { @include badge-light-hue(#4ade80); }
   &.vote-matrix-result--lost    { @include badge-light-hue(#f87171); }
@@ -1341,7 +1367,6 @@ details.accordion-item {
   @extend %badge-base;
   @include badge-light-hue(#60a5fa);
   font-size: 0.55rem;
-  text-decoration: none;
 }
 
 // Vote matrix responsive toggle
@@ -1377,9 +1402,7 @@ details.accordion-item {
 }
 
 .vote-matrix-card-top {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
+  display: block;
 }
 
 .vote-matrix-card-label {
@@ -1391,9 +1414,10 @@ details.accordion-item {
 
 .vote-matrix-card-bottom {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
   padding-left: 0; // align with label
 }
 
@@ -1446,7 +1470,7 @@ html:has(dialog[open].motion-modal) {
 }
 
 .motion-modal-content {
-  padding: 1rem 1rem 0;
+  padding: 0;
   margin: 0;
   position: relative;
   overflow: clip;
@@ -1466,14 +1490,24 @@ html:has(dialog[open].motion-modal) {
   font-size: 1.2rem;
   color: var(--thunder-400);
   cursor: pointer;
+  z-index: 2;
   transition: background 0.12s, color 0.12s;
 
   &:hover { background: var(--thunder-100); color: var(--thunder-700); }
 }
 
 .motion-modal-header {
-  padding-right: 1.5rem;
-  margin-bottom: 0.5rem;
+  padding: 0.6rem 2.2rem 0.6rem 0.85rem;
+  background: var(--term-bg-deep);
+  border-bottom: 1px solid var(--term-border);
+  position: relative;
+  @extend %term-scanlines;
+
+  > * { position: relative; z-index: 2; }
+}
+
+.motion-modal-body {
+  padding: 1rem;
 }
 
 .motion-modal-result {
@@ -1502,14 +1536,28 @@ html:has(dialog[open].motion-modal) {
   margin: 0;
 }
 
-.motion-modal-summary {
-  font-family: var(--font-prose);
-  font-size: 0.75rem;
-  color: var(--thunder-600);
-  line-height: 1.4;
-  margin: 0 0 0.6rem;
-  padding-bottom: 0.6rem;
+.motion-modal-summary-block {
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--thunder-100);
+}
+
+.motion-modal-summary-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--heading);
+  margin-bottom: 0.3rem;
+}
+
+.motion-modal-summary {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--thunder-700);
+  line-height: 1.55;
+  margin: 0;
 }
 
 .motion-modal-vote-split {
@@ -1597,11 +1645,11 @@ html:has(dialog[open].motion-modal) {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-weight: 700;
-  color: color-mix(in srgb, var(--accent) 70%, var(--term-fg));
+  color: color-mix(in srgb, var(--heading) 70%, var(--term-fg));
 
   &::before {
     content: '> ';
-    color: var(--accent);
+    color: var(--heading);
     opacity: 0.6;
   }
 }
@@ -1856,7 +1904,7 @@ html:has(dialog[open].motion-modal) {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--accent);
+  color: var(--heading);
 }
 
 .map-subtitle {
@@ -2279,6 +2327,8 @@ html:has(dialog[open].motion-modal) {
     radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.25) 100%),
     var(--surface-dark);
   border-top: 2px solid var(--term-border);
+  border-radius: var(--radius-md);
+  overflow: clip;
   position: relative;
   @extend %term-scanlines;
   box-shadow: var(--hero-screen-glow);
