@@ -1,0 +1,260 @@
+package pages
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"thundercitizen/internal/assets"
+	"thundercitizen/internal/muni"
+	"thundercitizen/internal/views"
+	"thundercitizen/templates"
+	"thundercitizen/templates/components"
+)
+
+templ DataPacks(vm views.DataPacksViewModel) {
+	@templates.Layout("Data", "Installed data packs, bundle status, and trust store for Thunder Citizen's signed data pipeline.") {
+		@DataPacksPartial(vm)
+		<script src={ assets.URL("/static/vendor/d3.min.js") }></script>
+		<script src={ assets.URL("/static/data/data-treemap.js") }></script>
+	}
+}
+
+templ DataPacksPartial(vm views.DataPacksViewModel) {
+	@components.PageHeader(components.PageHeaderProps{
+		Title: "Data",
+		Lead:  "Signed data packs, bundle status, and the trust store that protects them.",
+	})
+
+	@components.Card(components.CardProps{Title: "Bundle status"}) {
+		<dl class="data-status">
+			<dt>State</dt>
+			<dd>
+				<span class={ "badge", templ.KV(views.StatusBadgeClass(vm.Status.State), true) }>
+					{ string(vm.Status.State) }
+				</span>
+				if vm.Status.Message != "" {
+					<small>&nbsp;{ vm.Status.Message }</small>
+				}
+			</dd>
+			if !vm.Status.LastSuccessAt.IsZero() {
+				<dt>Last success</dt>
+				<dd>{ formatTimestamp(vm.Status.LastSuccessAt) }</dd>
+			}
+			if !vm.Status.LastErrorAt.IsZero() {
+				<dt>Last error</dt>
+				<dd>
+					<code>{ vm.Status.LastError }</code>
+					<small>&nbsp;{ formatTimestamp(vm.Status.LastErrorAt) }</small>
+				</dd>
+			}
+			if vm.Status.SignerFile != "" {
+				<dt>Signer</dt>
+				<dd>
+					<code>{ vm.Status.SignerFile }</code>
+					<small>&nbsp;{ shortFP(vm.Status.SignerFP) }</small>
+				</dd>
+			}
+			if vm.Status.MerkleRoot != "" {
+				<dt>Bundle merkle</dt>
+				<dd><code>{ shortHexForTempl(vm.Status.MerkleRoot, 16) }</code></dd>
+			}
+		</dl>
+	}
+
+	@components.Card(components.CardProps{Title: "Pack treemap"}) {
+		<p class="data-trust-note">
+			Outer rectangles group by signer. Inner tile area is proportional
+			to row count. Hover for detail, click to jump to the list below.
+			Transit days are omitted here; see the detail list for those.
+		</p>
+		<div class="data-treemap-legend" aria-hidden="true">
+			<span class="data-legend-swatch data-legend-council"></span> Council
+			<span class="data-legend-swatch data-legend-budget"></span> Budget
+			<span class="data-legend-swatch data-legend-global"></span> Global
+		</div>
+		<div class="data-treemap-wrap">
+			<svg id="data-treemap" role="img"
+				aria-label={ treemapLabel(vm) }></svg>
+			<div id="data-info-bar" class="data-info-bar" aria-live="polite"></div>
+		</div>
+		@templ.JSONScript("data-treemap-data", vm.Treemap)
+	}
+
+	if len(vm.Timeline.Rows) > 0 {
+		@components.Card(components.CardProps{Title: "Activity timeline"}) {
+			<div class="data-timeline">
+				<div class="data-timeline-axis">
+					<span class="data-timeline-label" aria-hidden="true"></span>
+					<span class="data-timeline-track data-timeline-axis-track">
+						for _, t := range vm.Timeline.Ticks {
+							<span class="data-timeline-tick" { timelineTickAttrs(t.Pct)... }>{ t.Label }</span>
+						}
+						<span class="data-timeline-today data-timeline-today-axis" { timelineTodayAttrs(vm.Timeline.Rows[0].TodayPct)... } aria-label={ "today " + vm.Timeline.Today.Format("2006-01-02") }></span>
+					</span>
+				</div>
+				<ul class="data-timeline-rows">
+					for _, row := range vm.Timeline.Rows {
+						<li class="data-timeline-row">
+							<span class="data-timeline-label">
+								<code>{ row.PackID }</code>
+								<small>&nbsp;{ row.UnitLabel }</small>
+							</span>
+							<span class="data-timeline-track">
+								<span class={ "data-timeline-bar", views.UnitKindClass(row.UnitKind) } { timelineBarAttrs(row.OffsetPct, row.WidthPct)... }></span>
+								<span class="data-timeline-today" { timelineTodayAttrs(row.TodayPct)... } aria-label="today"></span>
+							</span>
+						</li>
+					}
+				</ul>
+			</div>
+		}
+	}
+
+	@components.Card(components.CardProps{Title: "Pack detail"}) {
+		<ul class="data-pack-list">
+			for _, group := range vm.Groups {
+				for _, p := range group.Packs {
+					<li class={ "data-pack-item", views.UnitKindClass(p.Kind) } id={ "pack-" + p.ID } data-pack-id={ p.ID }>
+						<header>
+							<span class={ "badge", views.UnitKindClass(p.Kind) }>{ group.Title }</span>
+							<code>{ p.ID }</code>
+							<span class="data-pack-unit">{ p.UnitLabel }</span>
+						</header>
+						<dl>
+							<dt>Rows</dt>
+							<dd>{ formatCount(p.TotalRows) }</dd>
+							<dt>Datasets</dt>
+							<dd>{ fmt.Sprintf("%d", p.DatasetCount) }</dd>
+							<dt>Applied</dt>
+							<dd>{ formatTimestamp(p.AppliedAt) }</dd>
+							if p.SignerFile != "" {
+								<dt>Signer</dt>
+								<dd>
+									<code>{ p.SignerFile }</code>
+									<small>&nbsp;{ p.SignerShort }</small>
+								</dd>
+							}
+							if p.MerkleShort != "" {
+								<dt>Merkle</dt>
+								<dd><code>{ p.MerkleShort }</code></dd>
+							}
+						</dl>
+						if p.LastError != "" {
+							<p class="data-pack-error">
+								<span class="badge badge-status-error">error</span>
+								<code>{ p.LastError }</code>
+							</p>
+						}
+					</li>
+				}
+			}
+		</ul>
+	}
+
+	@components.Card(components.CardProps{Title: "Trust store"}) {
+		<p class="data-trust-note">
+			Signers live in <code>keys/approved/</code>; the blacklist lives in
+			<code>keys/revoked/</code>. Both are embedded into this binary at
+			build time — rotation and revocation ship as code changes.
+		</p>
+		<h3>Approved</h3>
+		if len(vm.Approved) == 0 {
+			<p class="data-empty">No approved signers — production builds require at least one.</p>
+		} else {
+			<ul class="data-key-list">
+				for _, k := range vm.Approved {
+					<li>
+						<code>{ k.Filename }</code>
+						<small>&nbsp;{ shortFP(k.Fingerprint) }</small>
+					</li>
+				}
+			</ul>
+		}
+		<h3>Revoked</h3>
+		if len(vm.Revoked) == 0 {
+			<p class="data-empty">No revoked signers.</p>
+		} else {
+			<ul class="data-key-list">
+				for _, k := range vm.Revoked {
+					<li>
+						<code>{ k.Filename }</code>
+						<small>&nbsp;{ shortFP(k.Fingerprint) }</small>
+					</li>
+				}
+			</ul>
+		}
+	}
+}
+
+func formatTimestamp(t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	return t.Format("2006-01-02 15:04 MST")
+}
+
+func shortFP(fp string) string {
+	s := fp
+	if strings.HasPrefix(s, "SHA256:") {
+		s = s[7:]
+	}
+	if len(s) > 12 {
+		s = s[:12]
+	}
+	return s
+}
+
+func shortHexForTempl(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
+func formatCount(n int64) string {
+	// Civic-scale counts only ever need thousands grouping.
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	s := fmt.Sprintf("%d", n)
+	var b strings.Builder
+	for i, r := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteRune(',')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func treemapLabel(vm views.DataPacksViewModel) string {
+	signers := len(vm.Treemap.Signers)
+	packs := 0
+	for _, s := range vm.Treemap.Signers {
+		packs += len(s.Packs)
+	}
+	return fmt.Sprintf("Pack treemap: %d signers, %d packs, %s total rows.",
+		signers, packs, formatCount(vm.Treemap.TotalRows))
+}
+
+func timelineBarAttrs(offset, width float64) templ.Attributes {
+	return templ.Attributes{
+		"style": fmt.Sprintf("left:%.2f%%;width:%.2f%%", offset, width),
+	}
+}
+
+func timelineTodayAttrs(today float64) templ.Attributes {
+	return templ.Attributes{
+		"style": fmt.Sprintf("left:%.2f%%", today),
+	}
+}
+
+func timelineTickAttrs(pct float64) templ.Attributes {
+	return templ.Attributes{
+		"style": fmt.Sprintf("left:%.2f%%", pct),
+	}
+}
+
+// Keep referenced for the templ generator.
+var _ = muni.StateIdle

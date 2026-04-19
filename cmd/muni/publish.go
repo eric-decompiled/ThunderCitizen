@@ -24,7 +24,6 @@ const (
 	spacesEndpoint = "tor1.digitaloceanspaces.com"
 	spacesBucket   = "thundercitizen"
 	publicBase     = "https://thundercitizen.tor1.digitaloceanspaces.com"
-	signingKeyFile = ".signing-key.pub"
 	indexKey       = "index.json"
 )
 
@@ -36,15 +35,17 @@ func runPublish(args []string) {
 		fail("flags: %v", err)
 	}
 
-	// 1. Verify the bundle. Reuses the same signature check the server does,
-	//    so anything that fails here would fail in production too.
-	pubKey, err := os.ReadFile(signingKeyFile)
+	// 1. Verify the bundle against the embedded trust store. Anything
+	//    that fails here would fail on the server too — publishing a
+	//    bundle signed by a revoked key would just get rejected on
+	//    the next apply cycle, so catch it locally first.
+	trust, err := munisign.LoadTrust()
 	if err != nil {
-		fail("read %s: %v (run from repo root)", signingKeyFile, err)
+		fail("load trust: %v", err)
 	}
-	v, err := munisign.VerifyFS(os.DirFS(*dir), pubKey)
+	v, err := munisign.VerifyFSWithTrust(os.DirFS(*dir), trust)
 	if err != nil {
-		fail("verify %s: %v (run `munisign sign` first)", *dir, err)
+		fail("verify %s: %v (run `munisign sign` first, or check keys/approved/)", *dir, err)
 	}
 	logf("verified  merkle=%s  signer=%s", v.MerkleRoot[:12], v.SignerFingerprint)
 

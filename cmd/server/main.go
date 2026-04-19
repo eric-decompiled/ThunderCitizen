@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -53,18 +56,24 @@ func main() {
 		log.Warn("migration warning", "err", err)
 	}
 
-	// Apply signed municipal data bundle. In production, downloads
-	// muni.zip from DO Spaces, verifies the SSH signature, and loads
-	// TSV data into the database. In dev, reads local muni/ directory.
-	// Each dataset is tracked in data_patch_log with the signer's
-	// fingerprint — skip if already applied with the same sha256.
-	//
-	// To avoid hitting DO Spaces on every restart we gate the fetch on
-	// muni_fetch_state.last_checked_at. If we checked in the last 24h
-	// the DB already has the data and we short-circuit before download.
-	muniCtx, muniCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	applyMuniBundle(muniCtx, db, cfg)
-	muniCancel()
+	// Trust store is loaded once at startup. A malformed or
+	// ambiguous trust store is a deploy-blocking bug — we refuse
+	// to serve a single request without a clean trust graph.
+	trust, err := munisign.LoadTrust()
+	if err != nil {
+		log.Error("trust store failed to load", "err", err)
+		os.Exit(1)
+	}
+	log.Info("trust store",
+		"approved", len(trust.Approved),
+		"revoked", len(trust.Revoked))
+
+	// Muni apply runs asynchronously in production so the HTTP
+	// listener comes up immediately. In dev we fast-path the whole
+	// thing when BOD.tsv is unchanged since the last boot — no
+	// network, no Postgres staging scan, instant hot-reload.
+	muniStatus := muni.NewStatus()
+	go applyMuniBundle(db, cfg, trust, muniStatus)
 
 	// GTFS: synchronous initial fetch so routes are in the DB before the
 	// server starts serving requests. On first boot this downloads +
@@ -148,6 +157,7 @@ func main() {
 	th.VehicleStream.Start(transitCtx)
 
 	h := handlers.New(db, recorder)
+	h.AttachMuni(trust, muniStatus)
 
 	r := chi.NewRouter()
 	// RequestID runs outermost so the per-request logger it attaches to
@@ -194,6 +204,7 @@ func main() {
 		r.Get("/minutes/{id}", h.CouncilMeeting)
 		r.Get("/motions", h.Motions)
 		r.Get("/about", h.About)
+		r.Get("/data", h.DataPacks)
 	})
 	// Accept HEAD on /health too — Docker's wget --spider probe uses HEAD
 	// and was getting a 405 from a GET-only route, which made the container
@@ -278,61 +289,114 @@ func main() {
 // publications within a day, long enough that dev hot-reloads don't spam DO.
 const muniCheckInterval = 24 * time.Hour
 
-// applyMuniBundle resolves the bundle (local dir in dev, DO Spaces in prod)
-// and applies it, unless we've already checked inside the last muniCheckInterval.
-func applyMuniBundle(ctx context.Context, db *pgxpool.Pool, cfg *config.Config) {
-	usesRemote := !(cfg.Environment != "production" && cfg.MuniURL == config.DataBaseURL+"/index.json")
-	if usesRemote {
-		if last, err := muni.LastCheckedAt(ctx, db); err != nil {
-			log.Warn("muni fetch state unreadable; fetching anyway", "err", err)
-		} else if !last.IsZero() && time.Since(last) < muniCheckInterval {
-			log.Info("muni bundle recently checked; skipping fetch",
-				"last_checked", last.Format(time.RFC3339),
-				"age", time.Since(last).Round(time.Minute))
+// applyMuniBundle resolves the bundle (local dir in dev, DO Spaces in
+// prod) and applies it. Runs in its own goroutine — the HTTP listener
+// is already accepting requests from the last-applied DB state when
+// this starts. Status updates flow through the shared muni.Status so
+// the /data admin page can render progress and errors.
+func applyMuniBundle(db *pgxpool.Pool, cfg *config.Config, trust *munisign.Trust, status *muni.Status) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	localDev := cfg.Environment != "production" && cfg.MuniURL == config.DataBaseURL+"/index.json"
+
+	if localDev {
+		// Dev fast path: if BOD.tsv hash matches the last-applied
+		// hash in muni_dev_cache we can skip the whole apply loop.
+		// Catches the common `make dev` hot-reload case where the
+		// operator just tweaked a .go file — no need to reparse,
+		// rehash, and query data_patch_log for every dataset.
+		bodSha, err := hashLocalBOD()
+		if err != nil {
+			status.SetError(err)
+			log.Error("dev: BOD.tsv hash failed", "err", err)
 			return
 		}
+		cached, err := muni.DevCacheBODSha(ctx, db)
+		if err != nil {
+			log.Warn("dev cache read failed; applying anyway", "err", err)
+		} else if cached != "" && cached == bodSha {
+			status.SetSkipped("dev fast-path: BOD unchanged since last boot")
+			log.Info("muni: dev fast-path, BOD unchanged", "sha", bodSha[:12])
+			return
+		}
+
+		status.SetState(muni.StateApplying, "dev: applying local bundle")
+		bundle := &muni.Bundle{FS: os.DirFS("data/muni")}
+		n, err := muni.Apply(ctx, db, bundle)
+		if err != nil {
+			status.SetError(err)
+			log.Error("muni data apply failed", "err", err)
+			return
+		}
+		if err := muni.SetDevCacheBODSha(ctx, db, bodSha); err != nil {
+			log.Warn("failed to update dev cache", "err", err)
+		}
+		status.SetSuccess("", "", "", n)
+		if n > 0 {
+			log.Info("applied muni data", "datasets", n)
+		}
+		return
 	}
 
-	bundle, err := resolveMuniBundle(ctx, cfg)
+	// Production path.
+	if last, err := muni.LastCheckedAt(ctx, db); err != nil {
+		log.Warn("muni fetch state unreadable; fetching anyway", "err", err)
+	} else if !last.IsZero() && time.Since(last) < muniCheckInterval {
+		status.SetSkipped("prod: last checked within 24h")
+		log.Info("muni bundle recently checked; skipping fetch",
+			"last_checked", last.Format(time.RFC3339),
+			"age", time.Since(last).Round(time.Minute))
+		return
+	}
+
+	status.SetState(muni.StateFetching, "downloading bundle")
+	log.Info("downloading muni data", "url", cfg.MuniURL)
+
+	bundle, err := muni.LoadWithTrust(ctx, cfg.MuniURL, trust)
 	if err != nil {
+		status.SetError(err)
 		log.Error("muni data unavailable", "err", err)
 		return
 	}
+
+	status.SetState(muni.StateApplying, "applying bundle")
 	n, err := muni.Apply(ctx, db, bundle)
 	if err != nil {
+		status.SetError(err)
 		log.Error("muni data apply failed", "err", err)
 		return
 	}
+
+	signerFP := ""
+	signerFile := ""
+	merkle := ""
+	if bundle.Verification != nil {
+		signerFP = bundle.Verification.SignerFingerprint
+		merkle = bundle.Verification.MerkleRoot
+		if tk, ok := trust.Approved[signerFP]; ok {
+			signerFile = tk.Filename
+		}
+	}
+	status.SetSuccess(signerFP, signerFile, merkle, n)
+
 	if n > 0 {
 		log.Info("applied muni data", "datasets", n)
 	}
-	if usesRemote {
-		if err := muni.MarkChecked(ctx, db); err != nil {
-			log.Warn("failed to record muni check", "err", err)
-		}
+	if err := muni.MarkChecked(ctx, db); err != nil {
+		log.Warn("failed to record muni check", "err", err)
 	}
 }
 
-// resolveMuniBundle downloads and verifies the signed muni bundle.
-// In dev, reads local muni/ directory without signature verification.
-func resolveMuniBundle(ctx context.Context, cfg *config.Config) (*muni.Bundle, error) {
-	// Dev mode: local directory, no verification.
-	if cfg.Environment != "production" && cfg.MuniURL == config.DataBaseURL+"/index.json" {
-		return &muni.Bundle{FS: os.DirFS("data/muni")}, nil
+// hashLocalBOD computes SHA-256 over the local BOD.tsv contents. Used
+// by the dev fast path to decide whether apply can be skipped.
+func hashLocalBOD() (string, error) {
+	data, err := os.ReadFile(filepath.Join("data", "muni", muni.BODFile))
+	if err != nil {
+		return "", err
 	}
-	pubKey := resolvePubKey()
-	log.Info("downloading muni data", "url", cfg.MuniURL)
-	return muni.Load(ctx, cfg.MuniURL, pubKey)
-}
-
-func resolvePubKey() []byte {
-	if k := os.Getenv("MUNISIGN_KEY"); k != "" {
-		return []byte(k)
-	}
-	if munisign.SigningKey != "" {
-		return []byte(munisign.SigningKey)
-	}
-	return nil
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func runMigrations(databaseURL string) error {

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"thundercitizen/internal/council"
@@ -23,6 +24,7 @@ type stubCouncilStore struct {
 	motionStats            func(ctx context.Context, term string) (int, int, int, error)
 	searchMotions          func(ctx context.Context, f council.MotionFilter) ([]council.MotionRow, int, error)
 	getMeetingByID         func(ctx context.Context, id string) (*council.MeetingDetail, error)
+	getMeetingBySlug       func(ctx context.Context, slug string) (*council.MeetingDetail, error)
 	loadVoteRecords        func(ctx context.Context, motionID int64) (*council.VoteRecord, error)
 }
 
@@ -49,6 +51,14 @@ func (s stubCouncilStore) SearchMotions(ctx context.Context, f council.MotionFil
 }
 func (s stubCouncilStore) GetMeetingByID(ctx context.Context, id string) (*council.MeetingDetail, error) {
 	return s.getMeetingByID(ctx, id)
+}
+func (s stubCouncilStore) GetMeetingBySlug(ctx context.Context, slug string) (*council.MeetingDetail, error) {
+	if s.getMeetingBySlug != nil {
+		return s.getMeetingBySlug(ctx, slug)
+	}
+	// Default: tests target the UUID/ID path — return ErrNoRows so the
+	// CouncilMeeting handler falls through to GetMeetingByID.
+	return nil, pgx.ErrNoRows
 }
 func (s stubCouncilStore) LoadVoteRecords(ctx context.Context, motionID int64) (*council.VoteRecord, error) {
 	return s.loadVoteRecords(ctx, motionID)
@@ -127,7 +137,11 @@ func TestCouncilMeetingReturnsInternalErrorWhenVoteRecordsFail(t *testing.T) {
 
 	newCouncilStore = func(_ *pgxpool.Pool) councilStore {
 		return stubCouncilStore{
-			getMeetingByID: func(context.Context, string) (*council.MeetingDetail, error) {
+			// Resolve the slug directly so the handler skips the
+			// slug-to-ID fallback redirect and proceeds to load
+			// vote records — which fails, triggering the 500 we
+			// want to assert on.
+			getMeetingBySlug: func(context.Context, string) (*council.MeetingDetail, error) {
 				return &council.MeetingDetail{
 					ID: "m1",
 					Motions: []council.MotionRow{

@@ -178,7 +178,9 @@ $badge-hues: (
     // The green-phosphor CRT vibe is the dark aesthetic; no dual-phosphor split.
     --heading: var(--accent);
     --heading-hover: var(--accent-hover);
-    --heading-glow: none;
+    // Subtle phosphor bloom on headings — gives the CRT glow the docs promise.
+    // Kept low-intensity so body prose sitting next to a heading stays crisp.
+    --heading-glow: 0 0 6px rgba(74, 222, 128, 0.35);
 
     // Hero phosphor — stays bright green in dark mode
     --hero-fg: #4ade80;

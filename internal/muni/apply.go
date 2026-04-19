@@ -17,10 +17,12 @@ var log = logger.New("muni")
 
 // Apply reads BOD.tsv from the bundle, dispatches each dataset to its
 // plugin, and tracks applied datasets in data_patch_log including who
-// signed the bundle.
+// signed the bundle. On a verified signature, any dataset whose hash
+// drifted from the last-applied version is re-applied (the signed BOD
+// is authoritative); on an unsigned dev bundle, drift is re-applied
+// with a warning so local iteration still works.
 //
-// Returns the count of newly loaded datasets. Skips datasets whose sha256
-// already appears in data_patch_log. Errors on checksum drift.
+// Returns the count of newly loaded (or re-loaded) datasets.
 func Apply(ctx context.Context, pool *pgxpool.Pool, b *Bundle) (int, error) {
 	datasets, err := ParseBOD(b.FS)
 	if err != nil {
@@ -28,8 +30,12 @@ func Apply(ctx context.Context, pool *pgxpool.Pool, b *Bundle) (int, error) {
 	}
 
 	signer := ""
+	merkle := ""
+	verified := false
 	if b.Verification != nil {
 		signer = b.Verification.SignerFingerprint
+		merkle = b.Verification.MerkleRoot
+		verified = true
 		log.Info("verified bundle",
 			"merkle", b.Verification.MerkleRoot[:12],
 			"signer", b.Verification.SignerKey,
@@ -44,20 +50,32 @@ func Apply(ctx context.Context, pool *pgxpool.Pool, b *Bundle) (int, error) {
 	}
 
 	applied := 0
+	packErrors := make(map[string]string)
 	for _, ds := range datasets {
-		n, err := applyDataset(ctx, pool, b.FS, ds, signer)
+		n, err := applyDataset(ctx, pool, b.FS, ds, signer, verified)
 		if err != nil {
-			return applied, fmt.Errorf("muni: applying %s: %w", ds.File, err)
+			// Record the failure against the pack (if any) so the
+			// admin page can surface it, but keep going — a single
+			// bad dataset shouldn't block unrelated packs.
+			if ds.PackID != "" {
+				packErrors[ds.PackID] = err.Error()
+			}
+			log.Error("apply failed", "dataset", ds.File, "err", err)
+			continue
 		}
 		applied += n
 	}
+
+	if err := upsertPacks(ctx, pool, datasets, signer, merkle, packErrors); err != nil {
+		log.Warn("pack registry update failed", "err", err)
+	}
+
 	return applied, nil
 }
 
 // applyDataset dispatches to the dataset's plugin in a single transaction.
-// Returns 1 if newly applied, 0 if skipped (already applied with same hash).
-func applyDataset(ctx context.Context, pool *pgxpool.Pool, fsys fs.FS, ds Dataset, signer string) (int, error) {
-	// Check if already applied.
+// Returns 1 if newly applied or re-applied on drift, 0 if skipped.
+func applyDataset(ctx context.Context, pool *pgxpool.Pool, fsys fs.FS, ds Dataset, signer string, verified bool) (int, error) {
 	latest, err := latestAction(ctx, pool, ds.File)
 	if err != nil {
 		return 0, err
@@ -67,7 +85,23 @@ func applyDataset(ctx context.Context, pool *pgxpool.Pool, fsys fs.FS, ds Datase
 			log.Info("skipped (already applied)", "dataset", ds.File)
 			return 0, nil
 		}
-		return 0, fmt.Errorf("checksum drift: applied %s, BOD says %s — publish a new bundle", latest.checksum[:12], ds.SHA256[:12])
+		// Checksum drift. The bundle's signature already verified at
+		// the loader boundary, so the new hash is authoritative — re-
+		// apply and record the transition. For unsigned dev bundles
+		// drift still re-applies but with a WARN so the operator
+		// notices local edits.
+		if verified {
+			log.Info("checksum updated, re-applying",
+				"dataset", ds.File,
+				"old", latest.checksum[:12],
+				"new", ds.SHA256[:12],
+				"signer", signer)
+		} else {
+			log.Warn("checksum drift on unsigned bundle, re-applying",
+				"dataset", ds.File,
+				"old", latest.checksum[:12],
+				"new", ds.SHA256[:12])
+		}
 	}
 
 	plugin := Lookup(ds.Plugin)
@@ -98,6 +132,76 @@ func applyDataset(ctx context.Context, pool *pgxpool.Pool, fsys fs.FS, ds Datase
 	}
 
 	return 1, nil
+}
+
+// upsertPacks groups the BOD datasets by pack_id and upserts one row
+// per pack into muni_packs. Packs with empty pack_id (v1-schema BODs
+// or datasets that explicitly opt out) are skipped.
+func upsertPacks(ctx context.Context, pool *pgxpool.Pool, datasets []Dataset, signer, merkle string, packErrors map[string]string) error {
+	type packAgg struct {
+		kind      UnitKind
+		start     time.Time
+		end       time.Time
+		count     int
+		totalRows int64
+	}
+	packs := make(map[string]*packAgg)
+	for _, ds := range datasets {
+		if ds.PackID == "" {
+			continue
+		}
+		p, ok := packs[ds.PackID]
+		if !ok {
+			p = &packAgg{kind: ds.UnitKind, start: ds.UnitStart, end: ds.UnitEnd}
+			packs[ds.PackID] = p
+		}
+		p.count++
+		p.totalRows += int64(ds.Rows)
+		// Widen the range if datasets in the pack disagree — should
+		// not happen for well-formed BODs but tolerate it.
+		if !ds.UnitStart.IsZero() && (p.start.IsZero() || ds.UnitStart.Before(p.start)) {
+			p.start = ds.UnitStart
+		}
+		if !ds.UnitEnd.IsZero() && (p.end.IsZero() || ds.UnitEnd.After(p.end)) {
+			p.end = ds.UnitEnd
+		}
+	}
+
+	for id, p := range packs {
+		var startArg, endArg any
+		if !p.start.IsZero() {
+			startArg = p.start
+		}
+		if !p.end.IsZero() {
+			endArg = p.end
+		}
+		var errArg any
+		if msg, ok := packErrors[id]; ok {
+			errArg = msg
+		}
+		_, err := pool.Exec(ctx, `
+			INSERT INTO muni_packs
+				(pack_id, unit_kind, unit_start, unit_end,
+				 dataset_count, total_rows, signer_fp, bundle_merkle,
+				 applied_at, last_error)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)
+			ON CONFLICT (pack_id) DO UPDATE SET
+				unit_kind     = EXCLUDED.unit_kind,
+				unit_start    = EXCLUDED.unit_start,
+				unit_end      = EXCLUDED.unit_end,
+				dataset_count = EXCLUDED.dataset_count,
+				total_rows    = EXCLUDED.total_rows,
+				signer_fp     = EXCLUDED.signer_fp,
+				bundle_merkle = EXCLUDED.bundle_merkle,
+				applied_at    = EXCLUDED.applied_at,
+				last_error    = EXCLUDED.last_error`,
+			id, string(p.kind), startArg, endArg,
+			p.count, p.totalRows, signer, merkle, errArg)
+		if err != nil {
+			return fmt.Errorf("upsert pack %s: %w", id, err)
+		}
+	}
+	return nil
 }
 
 type logEntry struct {

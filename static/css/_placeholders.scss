@@ -58,6 +58,23 @@
   }
 }
 
+// Reusable glass-card data label — frosted pill used to annotate data overlays
+// (map tooltips, diagram node labels). Shared by ward-map permanent labels and
+// budget Sankey node labels; SVG consumers mirror the same tokens on a <rect>.
+%glass-label {
+  @extend %frosted-glass;
+  border: 1px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--term-fg-bright);
+  text-shadow: 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
 // Reusable badge base — phosphor pill.
 // Each modifier sets `--badge-hue`; all color/fill/border/glow derives from it
 // via theme-scoped `--badge-*` tokens (see _tokens.scss + dark-theme mixin).

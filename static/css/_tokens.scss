@@ -38,7 +38,7 @@
   --term-bg-deep: #beb5a1;
   --term-fg: #475b65;
   --term-fg-bright: #073642;
-  --term-fg-dim: #3d5560;
+  --term-fg-dim: #2f4550;
   --term-accent: var(--accent);
   --term-accent-bright: var(--accent-hover);
   --term-accent-dim: #6ca6cf;
@@ -55,9 +55,13 @@
   --nav-hover-filter: none;
   --nav-active-filter: drop-shadow(0 0 1px rgba(0, 43, 54, 0.2));
 
-  // Typography — mono default, sans for prose
-  --font-mono: "SF Mono", "Cascadia Mono", "Menlo", "Consolas", "Ubuntu Mono", monospace;
-  --font-prose: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  // Typography — mono everywhere. --font-prose is kept as an alias that
+  // resolves to mono so existing selectors with `font-family: var(--font-prose)`
+  // continue to work; there is no separate prose face. Mono stack is extended
+  // to cover Android (Roboto Mono), non-Ubuntu Linux (DejaVu Sans Mono), and
+  // older Windows (Courier New) after the Ubuntu Mono step.
+  --font-mono: "SF Mono", "Cascadia Mono", "Menlo", "Consolas", "Roboto Mono", "Ubuntu Mono", "DejaVu Sans Mono", "Courier New", monospace;
+  --font-prose: var(--font-mono);
 
   // Pico integration
   --pico-font-family: var(--font-mono);

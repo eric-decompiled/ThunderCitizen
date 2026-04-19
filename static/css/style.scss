@@ -618,10 +618,72 @@ article > header {
 
   strong {
     color: var(--term-accent);
+    background:
+      linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent)
+        no-repeat -50% 0 / 50% 100%,
+      var(--term-accent);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: title-sweep 5s ease-in-out infinite;
+  }
+
+  .footer-brand {
+    text-decoration: none;
+    color: inherit;
   }
 
   p {
     margin: 0.25rem 0;
+  }
+
+  .footer-inner {
+    max-width: 40rem;
+    margin: 0 auto;
+  }
+
+  .footer-nav {
+    margin-bottom: 0.75rem;
+    text-align: center;
+    display: block;
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.2rem 1.25rem;
+    }
+
+    a {
+      display: inline-block;
+      padding: 0.15rem 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.72rem;
+      text-decoration: none;
+      color: var(--term-fg-dim);
+      border-bottom: 1px solid transparent;
+      transition: color 0.15s ease, border-color 0.15s ease;
+    }
+
+    a:hover,
+    a:focus-visible {
+      color: var(--term-accent);
+      border-bottom-color: currentColor;
+    }
+
+    a[aria-current="page"] {
+      color: var(--term-accent);
+    }
+
+    @media (max-width: 600px) {
+      ul {
+        gap: 0.15rem 0.9rem;
+      }
+    }
   }
 }
 
@@ -1432,13 +1494,18 @@ html:has(dialog[open].motion-modal) {
   overflow: hidden;
 }
 
-// Motion detail modal
+// Motion detail modal — built out of the shared card primitives.
+// Dialog bg matches card body (--pico-card-background-color), header +
+// footer reuse the deep-stone strip pattern so it reads as the same
+// component family as every other card on the site, in both themes.
 .motion-modal {
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 0;
   max-width: 30rem;
   width: calc(100% - 2rem);
+  background: var(--pico-card-background-color);
+  color: var(--pico-color);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
   animation: modal-in 0.2s ease-out;
 
@@ -1594,49 +1661,23 @@ html:has(dialog[open].motion-modal) {
   line-height: 1.5;
 }
 
+// Footer reuses the site-wide strip pattern (same tokens as .term-panel-footer
+// and article > footer): deep-stone bg in light, near-black phosphor in dark.
+// Theme flips via tokens — no hardcoded colors.
 .motion-modal-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.4rem 0.6rem;
-  margin-top: var(--space-3);
-  padding: 0.5rem 0.75rem;
-  background:
-    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 8%, transparent), transparent 60%),
-    #0a0a0a;
-  border-top: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  padding: 0.5rem 0.85rem;
+  background: var(--term-bg-deep);
+  border-top: 1px solid var(--term-border);
   position: relative;
-  overflow: hidden;
+  @extend %term-scanlines;
   border-radius: 0 0 var(--radius-md) var(--radius-md);
 
-  // Scanline overlay
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(255, 255, 255, 0.03) 2px,
-      rgba(255, 255, 255, 0.03) 3px
-    );
-    pointer-events: none;
-  }
-
-  // Edge glow
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    opacity: 0.5;
-    pointer-events: none;
-  }
-
-  > * { position: relative; } // lift above scanline
+  > * { position: relative; z-index: 2; }
 }
 
 .motion-modal-date {
@@ -1645,12 +1686,12 @@ html:has(dialog[open].motion-modal) {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-weight: 700;
-  color: color-mix(in srgb, var(--heading) 70%, var(--term-fg));
+  color: var(--term-fg-dim);
 
   &::before {
     content: '> ';
-    color: var(--heading);
-    opacity: 0.6;
+    color: var(--term-accent);
+    opacity: 0.75;
   }
 }
 
@@ -1678,7 +1719,7 @@ html:has(dialog[open].motion-modal) {
   border: 1px solid currentColor;
 
   &:hover {
-    filter: brightness(1.1);
+    filter: brightness(1.08);
     transform: translateY(-1px);
     text-decoration: none;
   }
@@ -1688,24 +1729,22 @@ html:has(dialog[open].motion-modal) {
   &[hidden] { display: none; }
 }
 
+// Primary action — filled with --accent. Text uses --thunder-50 so it flips:
+// cream on Solarized blue (light, ~7:1) / near-black on phosphor green (dark, ~11:1).
 .motion-modal-btn-primary {
-  color: #0a0a0a;
+  color: var(--thunder-50);
   background: var(--accent);
   border-color: var(--accent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
-
-  &:hover {
-    box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
-  }
 }
 
+// Media / secondary — outlined accent. Same token pair, different surface treatment.
 .motion-modal-btn-media {
-  color: #60a5fa;
-  background: color-mix(in srgb, #60a5fa 12%, #0a0a0a);
-  text-shadow: 0 0 4px color-mix(in srgb, #60a5fa 60%, transparent);
+  color: var(--accent);
+  background: transparent;
+  border-color: var(--accent);
 
   &:hover {
-    box-shadow: 0 0 10px color-mix(in srgb, #60a5fa 50%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
 }
 
@@ -1814,6 +1853,16 @@ html:has(dialog[open].motion-modal) {
   .vote-matrix-result--carried       { @include badge-dark-hue(#4ade80); }
   .vote-matrix-result--lost          { @include badge-dark-hue(#f87171); }
   .vote-matrix-result--tie           { @include badge-dark-hue(#fbbf24); }
+  // /data admin page status pills
+  .badge-status-ok    { @include badge-dark-hue(#4ade80); }
+  .badge-status-info  { @include badge-dark-hue(#60a5fa); }
+  .badge-status-error { @include badge-dark-hue(#f87171); }
+  .badge-status-muted { @include badge-dark-hue(#9ca3af); }
+  // /data pack-kind pills (detail list labels)
+  .badge.pack-kind-council { @include badge-dark-hue(#60a5fa); }
+  .badge.pack-kind-budget  { @include badge-dark-hue(#fbbf24); }
+  .badge.pack-kind-transit { @include badge-dark-hue(#4ade80); }
+  .badge.pack-kind-global  { @include badge-dark-hue(#9ca3af); }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1836,6 +1885,7 @@ html:has(dialog[open].motion-modal) {
   // clip instead of hidden — overflow:hidden creates a compositing layer
   // that causes visible seams between Protomaps canvas tiles on the ward map.
   overflow: clip;
+  @extend %term-scanlines;
 
   .map-active {
     outline: 2px solid var(--accent);
@@ -1972,18 +2022,8 @@ html:has(dialog[open].motion-modal) {
 }
 
 .leaflet-tooltip.ward-label {
-  @extend %frosted-glass;
-  border: 1px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  @extend %glass-label;
   padding: 0.15rem 0.5rem;
-  border-radius: 3px;
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--term-fg-bright);
-  text-shadow: 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
 
   &::before { display: none; } // suppress Leaflet tooltip arrow
 }
@@ -2314,8 +2354,11 @@ html:has(dialog[open].motion-modal) {
 // cert lands like a certificate posted inside the restaurant window.
 
 .pagespeed-hero {
-  --hero-glow: 0 0 12px rgba(74, 222, 128, 0.4);
-  --hero-screen-glow: inset 0 0 60px rgba(74, 222, 128, 0.05);
+  // Mirrors .home-hero — --hero-fg flips between Solarized blue (light) and
+  // phosphor green (dark) so the cert picks up the active CRT palette.
+  --hero-glow: 0 0 12px color-mix(in srgb, var(--hero-fg) 40%, transparent);
+  --hero-screen-glow: inset 0 0 60px color-mix(in srgb, var(--hero-fg) 5%, transparent);
+  --term-scanline: rgba(255, 255, 255, 0.03);
 
   display: flex;
   flex-direction: column;
@@ -2332,16 +2375,23 @@ html:has(dialog[open].motion-modal) {
   position: relative;
   @extend %term-scanlines;
   box-shadow: var(--hero-screen-glow);
-  color: #4ade80;
+  color: var(--hero-fg);
 
   h2 {
     font-size: 1.4rem;
     font-weight: 800;
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    color: #4ade80;
     margin: 0 0 0.5rem;
+    background:
+      linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)
+        no-repeat -50% 0 / 50% 100%,
+      var(--hero-fg);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
     filter: drop-shadow(var(--hero-glow));
+    animation: hero-sweep 5s ease-in-out infinite;
   }
 
   .lead {
@@ -2354,7 +2404,7 @@ html:has(dialog[open].motion-modal) {
     a {
       color: inherit;
       text-decoration: underline;
-      text-decoration-color: rgba(74, 222, 128, 0.5);
+      text-decoration-color: color-mix(in srgb, var(--hero-fg) 50%, transparent);
       text-underline-offset: 0.15em;
 
       &:hover {

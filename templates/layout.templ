@@ -144,8 +144,19 @@ document.documentElement.classList.remove('no-js');
 				</div>
 			</main>
 			<footer class="site-footer">
-				<p><strong>Thunder Citizen</strong> · Data for the People! (of&#160;Thunder&#160;Bay)</p>
-				<p>Independent civic research.</p>
+				<div class="footer-inner">
+					<nav class="footer-nav" aria-label="Footer navigation">
+						<ul>
+							@footerLink("/budget", "Budget", title)
+							@footerLink("/councillors", "Councillors", title)
+							@footerLink("/minutes", "Minutes", title)
+							@footerLink("/transit", "Transit", title)
+							@footerLink("/about", "About", title)
+						</ul>
+					</nav>
+					<p><a href="/" class="footer-brand"><strong>Thunder Citizen</strong></a> · Data for the People! (of&#160;Thunder&#160;Bay)</p>
+					<p>Independent civic research.</p>
+				</div>
 			</footer>
 			<script src={ assets.URL("/static/vendor/htmx.min.js") }></script>
 		</body>
@@ -153,6 +164,16 @@ document.documentElement.classList.remove('no-js');
 }
 
 templ navLink(href, label, currentTitle string) {
+	<li>
+		if isCurrentPage(label, currentTitle) {
+			<a href={ templ.SafeURL(href) } aria-current="page">{ label }</a>
+		} else {
+			<a href={ templ.SafeURL(href) }>{ label }</a>
+		}
+	</li>
+}
+
+templ footerLink(href, label, currentTitle string) {
 	<li>
 		if isCurrentPage(label, currentTitle) {
 			<a href={ templ.SafeURL(href) } aria-current="page">{ label }</a>

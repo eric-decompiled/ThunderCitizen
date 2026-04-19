@@ -81,6 +81,10 @@ func runExtract(args []string) {
 }
 
 // writeBOD generates BOD.tsv from the collected dataset entries.
+// Emits the v2 (15-column) schema — pack_id, unit_kind, unit_start,
+// unit_end appended so admin tooling and the server can group
+// datasets into logical packs. Datasets without a declared pack
+// render as unit_kind=global with empty range cells.
 func writeBOD(outDir string, datasets []muni.Dataset) error {
 	path := filepath.Join(outDir, "BOD.tsv")
 	f, err := os.Create(path)
@@ -91,17 +95,31 @@ func writeBOD(outDir string, datasets []muni.Dataset) error {
 
 	w := csv.NewWriter(f)
 	w.Comma = '\t'
-	w.Write([]string{"dataset", "plugin", "table", "source_url", "source_doc",
-		"description", "collected", "license", "processor", "rows", "sha256"})
+	w.Write(muni.BODColumns())
 	for _, ds := range datasets {
+		kind := string(ds.UnitKind)
+		if kind == "" {
+			kind = string(muni.UnitGlobal)
+		}
 		w.Write([]string{
 			ds.File, ds.Plugin, ds.Table, ds.SourceURL, ds.SourceDoc,
 			ds.Description, ds.Collected.Format(time.RFC3339),
 			ds.License, ds.Processor, strconv.Itoa(ds.Rows), ds.SHA256,
+			ds.PackID, kind,
+			formatDate(ds.UnitStart), formatDate(ds.UnitEnd),
 		})
 	}
 	w.Flush()
 	return w.Error()
+}
+
+// formatDate renders a pack range date in ISO form. Zero values (global
+// packs) render as the empty string so BOD.tsv stays diff-clean.
+func formatDate(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("2006-01-02")
 }
 
 func logf(format string, a ...any) {

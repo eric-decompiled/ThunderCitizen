@@ -20,6 +20,8 @@ import (
 	"thundercitizen/internal/database"
 	"thundercitizen/internal/httperr"
 	"thundercitizen/internal/logger"
+	"thundercitizen/internal/muni"
+	"thundercitizen/internal/munisign"
 	"thundercitizen/internal/transit"
 	"thundercitizen/internal/views"
 	"thundercitizen/templates/pages"
@@ -34,9 +36,11 @@ var (
 )
 
 type Handlers struct {
-	db       *pgxpool.Pool
-	ledger   *budget.Ledger
-	recorder *transit.Recorder
+	db         *pgxpool.Pool
+	ledger     *budget.Ledger
+	recorder   *transit.Recorder
+	trust      *munisign.Trust
+	muniStatus *muni.Status
 }
 
 type councilStore interface {

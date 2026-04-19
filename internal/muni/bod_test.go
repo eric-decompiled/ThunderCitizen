@@ -96,6 +96,61 @@ func TestParseBOD_Empty(t *testing.T) {
 	}
 }
 
+func TestParseBOD_V2Schema(t *testing.T) {
+	data := []byte("col1\tcol2\nval1\tval2\n")
+	fs := fstest.MapFS{
+		"budget.tsv": &fstest.MapFile{Data: data},
+		BODFile: &fstest.MapFile{Data: []byte(
+			"dataset\tplugin\ttable\tsource_url\tsource_doc\tdescription\tcollected\tlicense\tprocessor\trows\tsha256\tpack_id\tunit_kind\tunit_start\tunit_end\n" +
+				"budget.tsv\tbudget\tbudget_ledger\thttps://x\thttps://x\tFY2026\t2026-04-12T00:00:00Z\tpublic-record\tpg_dump\t1\t" + sha256hex(data) + "\tbudget-2026\tbudget_year\t2026-01-01\t2026-12-31\n",
+		)},
+	}
+
+	datasets, err := ParseBOD(fs)
+	if err != nil {
+		t.Fatalf("ParseBOD v2: %v", err)
+	}
+	if len(datasets) != 1 {
+		t.Fatalf("expected 1 dataset, got %d", len(datasets))
+	}
+	ds := datasets[0]
+	if ds.PackID != "budget-2026" {
+		t.Errorf("PackID: %q", ds.PackID)
+	}
+	if ds.UnitKind != UnitBudgetYear {
+		t.Errorf("UnitKind: %q", ds.UnitKind)
+	}
+	if ds.UnitStart.Format("2006-01-02") != "2026-01-01" {
+		t.Errorf("UnitStart: %v", ds.UnitStart)
+	}
+	if ds.UnitEnd.Format("2006-01-02") != "2026-12-31" {
+		t.Errorf("UnitEnd: %v", ds.UnitEnd)
+	}
+	if !ds.HasPack() {
+		t.Error("HasPack should be true")
+	}
+}
+
+func TestParseBOD_V1BackwardCompat(t *testing.T) {
+	// Old 11-column BODs still parse — pack metadata defaults to global.
+	data := []byte("col1\tcol2\nval1\tval2\n")
+	fs := testBOD(map[string][]byte{"test.tsv": data})
+	datasets, err := ParseBOD(fs)
+	if err != nil {
+		t.Fatalf("ParseBOD v1: %v", err)
+	}
+	if len(datasets) != 1 {
+		t.Fatalf("expected 1 dataset, got %d", len(datasets))
+	}
+	ds := datasets[0]
+	if ds.UnitKind != UnitGlobal {
+		t.Errorf("UnitKind default: got %q, want global", ds.UnitKind)
+	}
+	if ds.HasPack() {
+		t.Error("v1 rows should not report HasPack")
+	}
+}
+
 func TestIsProvenance(t *testing.T) {
 	if !IsProvenance("council_meetings.sources.tsv") {
 		t.Error("expected true for .sources.tsv")

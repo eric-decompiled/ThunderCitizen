@@ -23,6 +23,17 @@ func init() {
 
 const collectedNow = "" // sentinel — plugins call time.Now() in Extract
 
+// Pack date boundaries. Declared as package-level vars so every plugin
+// producing a dataset in the same pack agrees on the unit range.
+// Thunder Bay's 2022 Council was sworn in 2022-11-15; the next term
+// begins after the 2026-10-26 election. Budget FY runs calendar-year.
+var (
+	termStart2022 = time.Date(2022, 11, 15, 0, 0, 0, 0, time.UTC)
+	termEnd2022   = time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+	fy2026Start   = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	fy2026End     = time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
+)
+
 // ─── Councillors ────────────────────────────────────────────────────────
 
 type CouncillorsPlugin struct{}
@@ -47,6 +58,7 @@ func (CouncillorsPlugin) Extract(ctx context.Context, pool *pgxpool.Pool, outDir
 		Description: "Councillor biographies 2010-2026",
 		Collected:   time.Now().UTC(), License: "public-record", Processor: "hand-curated",
 		Rows: rows, SHA256: sha,
+		PackID: "councillors-global", UnitKind: UnitGlobal,
 	}}, nil
 }
 
@@ -92,6 +104,9 @@ func (CouncilMeetingsPlugin) Extract(ctx context.Context, pool *pgxpool.Pool, ou
 		Description: "Council meetings 2022-2026",
 		Collected:   time.Now().UTC(), License: "public-record", Processor: "scraped+llm",
 		Rows: rows, SHA256: sha,
+		PackID:    "council-2022-2026",
+		UnitKind:  UnitCouncilTerm,
+		UnitStart: termStart2022, UnitEnd: termEnd2022,
 	}}, nil
 }
 
@@ -137,6 +152,9 @@ func (CouncilMotionsPlugin) Extract(ctx context.Context, pool *pgxpool.Pool, out
 		Description: "Council motions 2022-2026 (id auto-assigned on insert)",
 		Collected:   time.Now().UTC(), License: "public-record", Processor: "scraped+llm",
 		Rows: rows, SHA256: sha,
+		PackID:    "council-2022-2026",
+		UnitKind:  UnitCouncilTerm,
+		UnitStart: termStart2022, UnitEnd: termEnd2022,
 	}}, nil
 }
 
@@ -181,6 +199,9 @@ func (CouncilVotesPlugin) Extract(ctx context.Context, pool *pgxpool.Pool, outDi
 		Description: "Individual councillor votes 2022-2026 (motion_id resolved at insert)",
 		Collected:   time.Now().UTC(), License: "public-record", Processor: "scraped",
 		Rows: rows, SHA256: sha,
+		PackID:    "council-2022-2026",
+		UnitKind:  UnitCouncilTerm,
+		UnitStart: termStart2022, UnitEnd: termEnd2022,
 	}}, nil
 }
 
@@ -226,6 +247,9 @@ func (BudgetAccountsPlugin) Extract(ctx context.Context, pool *pgxpool.Pool, out
 		Description: "Chart of accounts FY2026",
 		Collected:   time.Now().UTC(), License: "public-record", Processor: "pg_dump",
 		Rows: rows, SHA256: sha,
+		PackID:    "budget-2026",
+		UnitKind:  UnitBudgetYear,
+		UnitStart: fy2026Start, UnitEnd: fy2026End,
 	}}, nil
 }
 
@@ -261,6 +285,9 @@ func (BudgetLedgerPlugin) Extract(ctx context.Context, pool *pgxpool.Pool, outDi
 		Description: "Budget ledger FY2026",
 		Collected:   time.Now().UTC(), License: "public-record", Processor: "pg_dump",
 		Rows: rows, SHA256: sha,
+		PackID:    "budget-2026",
+		UnitKind:  UnitBudgetYear,
+		UnitStart: fy2026Start, UnitEnd: fy2026End,
 	}}, nil
 }
 

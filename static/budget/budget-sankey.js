@@ -198,6 +198,22 @@
       })
       .attr('data-name', function (d) { return d.name; });
 
+    // Hover/click handlers shared by node rect and label group so the label
+    // acts as an extended hit-target for the drill-down selector.
+    function onNodeEnter(event, d) {
+      if (locked) return;
+      clearTimeout(unhoverTimer);
+      showDetail(sankeyData, d.name);
+    }
+    function onNodeLeave() {
+      if (locked) return;
+      unhoverTimer = setTimeout(function () { showDefault(sankeyData); }, UNHOVER_DELAY);
+    }
+    function onNodeClick(event, d) {
+      event.stopPropagation();
+      if (opts.onNodeClick) opts.onNodeClick(d.name);
+    }
+
     node.append('rect')
       .attr('x', function (d) { return d.x0; })
       .attr('y', function (d) { return d.y0; })
@@ -213,38 +229,51 @@
         return tc.statusMuted;
       })
       .attr('rx', 3)
-      .on('mouseenter', function (event, d) {
-        if (locked) return;
-        clearTimeout(unhoverTimer);
-        showDetail(sankeyData, d.name);
-      })
-      .on('mouseleave', function () {
-        if (locked) return;
-        unhoverTimer = setTimeout(function () { showDefault(sankeyData); }, UNHOVER_DELAY);
-      })
-      .on('click', function (event, d) {
-        event.stopPropagation();
-        if (opts.onNodeClick) opts.onNodeClick(d.name);
-      })
+      .on('mouseenter', onNodeEnter)
+      .on('mouseleave', onNodeLeave)
+      .on('click', onNodeClick)
       .append('title')
       .text(function (d) { return d.name + ': $' + d.value.toFixed(1) + 'M'; });
 
-    // Labels
-    node.append('text')
+    // Labels — each node gets a glass-card backdrop with name + value stacked.
+    // Matches the ward-map permanent label treatment via shared CSS tokens.
+    // The label group is part of the drill-down selector: it shares the same
+    // hover/click handlers as the node rect.
+    const labelGroup = node.append('g')
+      .attr('class', 'sankey-label-group')
+      .on('mouseenter', onNodeEnter)
+      .on('mouseleave', onNodeLeave)
+      .on('click', onNodeClick);
+
+    labelGroup.append('text')
       .attr('class', 'sankey-label')
-      .attr('x', function (d) { return d.x0 < w / 2 ? d.x1 + 6 : d.x0 - 6; })
-      .attr('y', function (d) { return (d.y1 + d.y0) / 2 - 5; })
+      .attr('x', function (d) { return d.x0 < w / 2 ? d.x1 + 8 : d.x0 - 8; })
+      .attr('y', function (d) { return (d.y1 + d.y0) / 2 - 3; })
       .attr('text-anchor', function (d) { return d.x0 < w / 2 ? 'start' : 'end'; })
-      .attr('font-size', '11px').attr('font-weight', '500').attr('fill', tc.textColor)
       .text(function (d) { return d.name; });
 
-    node.append('text')
+    labelGroup.append('text')
       .attr('class', 'sankey-value')
-      .attr('x', function (d) { return d.x0 < w / 2 ? d.x1 + 6 : d.x0 - 6; })
+      .attr('x', function (d) { return d.x0 < w / 2 ? d.x1 + 8 : d.x0 - 8; })
       .attr('y', function (d) { return (d.y1 + d.y0) / 2 + 9; })
       .attr('text-anchor', function (d) { return d.x0 < w / 2 ? 'start' : 'end'; })
-      .attr('font-size', '10px').attr('fill', tc.statusMuted)
       .text(function (d) { return '$' + d.value.toFixed(1) + 'M'; });
+
+    // Size a backdrop rect to the combined text bbox and insert it first
+    // so the glass surface sits behind both lines. The rect captures pointer
+    // events for the whole label area.
+    labelGroup.each(function () {
+      const g = d3.select(this);
+      const bbox = this.getBBox();
+      const padX = 6, padY = 3;
+      g.insert('rect', ':first-child')
+        .attr('class', 'sankey-label-bg')
+        .attr('x', bbox.x - padX)
+        .attr('y', bbox.y - padY)
+        .attr('width', bbox.width + padX * 2)
+        .attr('height', bbox.height + padY * 2)
+        .attr('rx', 3);
+    });
 
     // Click background to unlock
     svg.on('click', function () { unlock(); });

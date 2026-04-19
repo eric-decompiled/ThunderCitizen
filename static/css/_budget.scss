@@ -22,7 +22,10 @@
   z-index: 100;
   @extend %frosted-glass;
   padding: 0;
-  margin-inline: calc(var(--page-gutter-x) * -1);
+  // Extend bar to viewport edges so it reads as a full-width sticky shelf
+  // instead of floating narrower than the content that sits below it.
+  // body has overflow-x: clip so no horizontal scroll results.
+  margin-inline: calc(50% - 50vw);
   margin-top: calc(var(--main-padding-block) * -1);
   margin-bottom: 0;
   border-bottom: 1px solid var(--glass-border);
@@ -398,6 +401,51 @@ details[open] > summary.service-detail-header::after {
   fill: none;
   cursor: pointer;
   transition: stroke-opacity 0.2s;
+}
+
+// Node labels — glass-card treatment mirroring %glass-label (used by ward map).
+// SVG can't @extend the HTML placeholder, so the rect/text below reference the
+// same tokens (--glass-bg-solid, --accent, --term-fg-bright) for visual parity.
+// The label group is part of the drill-down selector — pointer events land
+// on the backdrop rect; text stays passthrough so bbox measurement and
+// cursor hit-testing both work against the rect alone.
+.sankey-label-group {
+  cursor: pointer;
+}
+
+.sankey-label-bg {
+  fill: var(--glass-bg-solid);
+  stroke: var(--accent);
+  stroke-width: 1;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.18));
+  transition: stroke-width 0.15s ease, filter 0.15s ease;
+}
+
+.sankey-node.drillable .sankey-label-group { cursor: zoom-in; }
+.sankey-node.back-node .sankey-label-group { cursor: zoom-out; }
+
+.sankey-label-group:hover .sankey-label-bg {
+  stroke-width: 1.5;
+  filter: drop-shadow(0 1px 5px rgba(0, 0, 0, 0.28));
+}
+
+.sankey-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  fill: var(--term-fg-bright);
+  pointer-events: none;
+}
+
+.sankey-value {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  fill: var(--accent);
+  pointer-events: none;
 }
 
 .sankey-detail {

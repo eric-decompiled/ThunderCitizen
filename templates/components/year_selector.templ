@@ -18,7 +18,7 @@ type YearSelectorProps struct {
 // Server-side mode (TargetID empty): renders <a> links that navigate via query params.
 // Client-side mode (TargetID set): renders buttons that toggle [data-term] panels in #TargetID.
 templ YearSelector(props YearSelectorProps) {
-	if len(props.Years) >= 2 {
+	if len(props.Years) >= 1 {
 		<div class="year-selector-card" id="year-selector" data-current={ fmt.Sprintf("%d", props.Current) } data-window-size={ windowSize(len(props.Years)) }>
 			if props.TargetID != "" {
 				<div class="year-selector" role="tablist" aria-label={ selectorAriaLabel(props.AriaLabel) }>

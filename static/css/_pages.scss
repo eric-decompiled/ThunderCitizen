@@ -521,3 +521,442 @@
 
   code { font-size: 0.85em; }
 }
+
+// ==========================================================================
+// /DATA — PACKS + TRUST STORE
+// ==========================================================================
+
+.badge-status-ok     { @extend %badge-base; @include badge-light-hue(#047857); }
+.badge-status-info   { @extend %badge-base; @include badge-light-hue(#1d4ed8); }
+.badge-status-error  { @extend %badge-base; @include badge-light-hue(#b91c1c); }
+.badge-status-muted  { @extend %badge-base; @include badge-light-hue(#586e75); }
+
+.data-status {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0;
+  font-size: 0.85rem;
+
+  dt {
+    color: var(--term-fg-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.7rem;
+    padding-top: 0.1rem;
+  }
+
+  dd {
+    margin: 0;
+    word-break: break-all;
+  }
+
+  code {
+    font-size: 0.85em;
+    color: var(--heading);
+  }
+
+  small { color: var(--term-fg-dim); }
+}
+
+.data-pack-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.data-pack-card {
+  @extend %card-accent;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.82rem;
+
+  > header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.4rem;
+    padding: 0;
+    margin-bottom: 0.4rem;
+    border-bottom: 1px dashed var(--thunder-200);
+    padding-bottom: 0.35rem;
+
+    code {
+      font-size: 0.82rem;
+      color: var(--heading);
+      font-weight: 700;
+    }
+  }
+
+  .data-pack-unit {
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    color: var(--term-fg-dim);
+    text-transform: uppercase;
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.2rem 0.6rem;
+    margin: 0;
+  }
+
+  dt {
+    color: var(--term-fg-dim);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.8rem;
+    word-break: break-all;
+
+    code { font-size: 0.82em; }
+    small { color: var(--term-fg-dim); }
+  }
+}
+
+.data-pack-error {
+  margin: 0.4rem 0 0;
+  padding: 0.35rem 0.5rem;
+  border-left: 3px solid var(--status-error);
+  background: color-mix(in srgb, var(--status-error) 8%, transparent);
+  font-size: 0.75rem;
+
+  code {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--status-error);
+    word-break: break-word;
+  }
+}
+
+.data-empty {
+  color: var(--term-fg-dim);
+  font-style: italic;
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+}
+
+.data-trust-note {
+  color: var(--term-fg-dim);
+  font-size: 0.82rem;
+  margin: 0 0 0.8rem;
+
+  code { color: var(--heading); }
+}
+
+.data-key-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.3rem;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  code { color: var(--heading); font-weight: 600; }
+  small { color: var(--term-fg-dim); font-size: 0.75rem; }
+}
+
+// ─── Treemap ────────────────────────────────────────────────────────────
+
+.data-treemap-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 340px;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border: 1px solid var(--thunder-200);
+    border-radius: var(--radius-md);
+    background: var(--pico-card-background-color);
+  }
+
+  .data-treemap-pack:focus-visible rect:first-of-type {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.data-treemap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  font-size: 0.75rem;
+  color: var(--term-fg-dim);
+  margin: 0 0 0.5rem;
+}
+
+.data-legend-swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.data-legend-council { background: var(--status-info); }
+.data-legend-budget  { background: var(--status-warn); }
+.data-legend-global  { background: var(--status-muted); }
+
+// Info bar — same slide-up pattern as the transit/ward maps. Pinned to
+// the bottom of the treemap container, empty + hidden by default,
+// populated on hover/selection. No cursor-following.
+.data-info-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--pico-color);
+  background: color-mix(in srgb, var(--surface-dark) 92%, transparent);
+  border-top: 1px solid var(--thunder-300);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  backdrop-filter: blur(4px);
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 160ms ease-out, opacity 160ms ease-out;
+  pointer-events: none;
+
+  &.info-bar-visible {
+    transform: translateY(0);
+    opacity: 0.96;
+    pointer-events: auto;
+  }
+
+  // Locked state: same slide but with a left accent stripe so the
+  // operator can tell at a glance that the selection is sticky
+  // (matches the transit map's lock affordance).
+  &.info-bar-locked::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+
+  code { color: var(--accent); }
+
+  .data-info-id code {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .data-info-unit {
+    color: var(--term-fg-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.65rem;
+  }
+  .data-info-count { color: var(--pico-color); }
+  .data-info-applied,
+  .data-info-merkle { color: var(--term-fg-dim); }
+  .data-info-error {
+    color: var(--status-error);
+    font-weight: 600;
+    flex-basis: 100%;
+  }
+}
+
+// ─── Timeline strip ─────────────────────────────────────────────────────
+
+.data-timeline {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.data-timeline-axis,
+.data-timeline-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 3fr;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+}
+
+.data-timeline-axis {
+  margin-bottom: 0.15rem;
+}
+
+.data-timeline-rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.data-timeline-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: baseline;
+
+  code { color: var(--heading); font-weight: 600; }
+  small { color: var(--term-fg-dim); }
+}
+
+// Row track is now just a positioning canvas — no grey background so
+// the colored bar has a clean hard edge at the pack's unit_end instead
+// of visually continuing into a muted track.
+.data-timeline-track {
+  position: relative;
+  height: 18px;
+}
+
+.data-timeline-axis-track {
+  height: 18px;
+  border-bottom: 1px solid var(--thunder-200);
+}
+
+.data-timeline-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: var(--term-fg-dim);
+  padding-left: 4px;
+  border-left: 1px solid var(--thunder-300);
+  line-height: 18px;
+  pointer-events: none;
+}
+
+.data-timeline-bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 3px;
+  opacity: 0.95;
+
+  &.pack-kind-council { background: var(--status-info); }
+  &.pack-kind-budget  { background: var(--status-warn); }
+  &.pack-kind-global  { background: var(--status-muted); }
+  &.pack-kind-transit { background: var(--status-ok); }
+}
+
+.data-timeline-today {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent);
+  pointer-events: none;
+}
+
+.data-timeline-today-axis {
+  top: 0;
+  bottom: 0;
+}
+
+// ─── Pack detail list (replaces the old grid of cards) ──────────────────
+
+.data-pack-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.data-pack-item {
+  border-left: 3px solid var(--thunder-200);
+  padding: 0.45rem 0.7rem;
+  background: color-mix(in srgb, var(--pico-card-background-color) 70%, transparent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 0.82rem;
+  scroll-margin-top: 4rem;
+
+  > header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+
+    code {
+      color: var(--heading);
+      font-weight: 700;
+    }
+    .data-pack-unit {
+      color: var(--term-fg-dim);
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.15rem 0.55rem;
+    margin: 0;
+  }
+
+  dt {
+    color: var(--term-fg-dim);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  dd {
+    margin: 0;
+    word-break: break-all;
+    code { font-size: 0.82em; }
+    small { color: var(--term-fg-dim); }
+  }
+
+  &.pack-kind-council { border-left-color: var(--status-info); }
+  &.pack-kind-budget  { border-left-color: var(--status-warn); }
+  &.pack-kind-transit { border-left-color: var(--status-ok); }
+  &.pack-kind-global  { border-left-color: var(--status-muted); }
+}
+
+// Pack-kind pills: scoped to `.badge` so the same class name also
+// tints the list-item border-left without turning the li itself into
+// a pill.
+.badge.pack-kind-council,
+.badge.pack-kind-budget,
+.badge.pack-kind-transit,
+.badge.pack-kind-global {
+  @extend %badge-base;
+}
+
+.badge.pack-kind-council { @include badge-light-hue(#1d4ed8); }
+.badge.pack-kind-budget  { @include badge-light-hue(#b45309); }
+.badge.pack-kind-transit { @include badge-light-hue(#047857); }
+.badge.pack-kind-global  { @include badge-light-hue(#586e75); }
+
+@keyframes data-pack-flash {
+  0%   { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 80%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  100% { box-shadow: 0 0 0 0   color-mix(in srgb, var(--accent) 0%,  transparent); background: transparent; }
+}
+
+.data-pack-flash {
+  animation: data-pack-flash 1.4s ease-out 1;
+}

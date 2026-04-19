@@ -64,7 +64,7 @@ type MapProps struct {
 
 ### Palettes
 
-**Light (Fractured Stone — cool/ash):** three-tier stone hierarchy — page `#e1d9c9` (light stone), card body `#cfc7b5` (mid stone), nav/strip/footer `#beb5a1` (deep stone). Solarized blue `#155a8a` for interactive affordances (links, buttons, focus) and deeper `#0b4670` for headings/terminal labels — both darkened from prior cream-palette values so AA holds on the deeper surfaces. Muted text collapsed onto `#3d5560` so small/citation text passes AA on card and strip.
+**Light (Fractured Stone — cool/ash):** three-tier stone hierarchy — page `#e1d9c9` (light stone), card body `#cfc7b5` (mid stone), nav/strip/footer `#beb5a1` (deep stone). Solarized blue `#155a8a` for interactive affordances (links, buttons, focus) and deeper `#0b4670` for headings/terminal labels — both darkened from prior cream-palette values so AA holds on the deeper surfaces. Muted text (`--term-fg-dim`) is `#2f4550` — darkened so it reaches 4.9:1 on the deep-stone strip (footer, card footer, panel bars), not just the mid-stone card body.
 
 **Dark (Green Phosphor):** near-black green bg `#0d1a0d` (page), `#141e14` (card, lifted above page per Material-Dark elevation convention), `#0a100a` (strip/nav/footer, deepest). Phosphor green text `#4ade80` (10.3:1). Nav + site footer carry a phosphor-green halo box-shadow (`--strip-edge-glow-below/-above`) so they frame visibly against the near-black tiers. Headings collapse onto `--accent` — single-phosphor CRT vibe. CRT scanlines on header, green glow on title.
 
@@ -77,7 +77,7 @@ Dark mode is defined via `@mixin dark-theme` applied to both `@media (prefers-co
 | `--thunder-900` to `--thunder-50` | Solarized grey scale | Green phosphor scale | Text/bg hierarchy (flips) |
 | `--accent` | `#4a6100` (olive green) | `#4ade80` (phosphor) | Interactive affordances: links, buttons, focus rings |
 | `--heading` | `#155a8a` (Solarized blue, darkened) | `var(--accent)` — phosphor green | h1/h2/h3 + terminal-label family. Light uses classic Solarized blue; dark collapses onto --accent so the green-phosphor CRT look stays unified |
-| `--heading-glow` | `none` | `none` | Reserved for optional heading text-shadow; currently unused |
+| `--heading-glow` | `none` | phosphor bloom | Heading text-shadow. Off in light; `0 0 6px rgba(74,222,128,0.35)` in dark for the CRT glow |
 | `--heading-warm` | `#7a3f0a` (darkened Solarized orange) | `var(--accent)` — phosphor green | Scoped warm-accent variant. Applied via `.home article > header` to give home-page card header bars a rust/amber tone against the beige strip. Dark mode collapses onto --accent so the phosphor look stays unified |
 | `--term-*` tokens | Solarized values | Phosphor values | Semantic terminal tokens (bg, fg, border, glow) |
 | `--surface-dark` | `#002b36` | `#0a100a` | Header/footer background |
@@ -86,11 +86,11 @@ Dark mode is defined via `@mixin dark-theme` applied to both `@media (prefers-co
 
 ### Typography
 
-**Monospace default** via `--pico-font-family: var(--font-mono)`. Everything inherits mono.
+**Mono-only.** There is a single type face site-wide — `--font-mono`. `--font-prose` is an alias that resolves to `--font-mono`, so existing `font-family: var(--font-prose)` declarations (e.g. `.lead`, `.motion-text`, `.motion-heading`, `.motion-agenda-item`, `.sankey-detail-body p`, `.councillor-bio`) continue to work but render in mono. Don't add new `--font-prose` consumers; new code should inherit the default mono or omit `font-family` entirely.
 
-**Prose carve-outs** use `font-family: var(--font-prose)` for long-form text only: `.lead`, `.motion-text`, `.motion-heading`, `.motion-agenda-item`, `.sankey-detail-body p`, `.report-methodology p`, `.councillor-bio`.
+**Mono stack** covers Apple (SF Mono, Menlo) → Windows 11 (Cascadia Mono) → Windows (Consolas) → Android (Roboto Mono) → Ubuntu (Ubuntu Mono) → other Linux (DejaVu Sans Mono) → older Windows (Courier New) → generic `monospace`. Full stack in `static/css/_tokens.scss`.
 
-**Headings** are terminal labels: all `0.72rem`, uppercase, `letter-spacing: 0.08em`, `color: var(--heading)` (brown in light, amber in dark). Weight is the hierarchy lever: h1=800, h2=700, h3=600. `--accent` is reserved for interactive affordances (links, buttons, focus) — never use it for heading text.
+**Headings** are terminal labels: all `0.72rem`, uppercase, `letter-spacing: 0.08em`, `color: var(--heading)` (Solarized blue in light, phosphor green in dark). Weight is the hierarchy lever: h1=800, h2=700, h3=600. In dark mode a subtle phosphor text-shadow is applied via `--heading-glow` (no-op in light). `--accent` is reserved for interactive affordances (links, buttons, focus) — never use it for heading text.
 
 ### Accessing theme colors
 

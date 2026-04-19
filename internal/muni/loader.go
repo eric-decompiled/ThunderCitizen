@@ -22,15 +22,53 @@ type Bundle struct {
 //     the bundle name, downloads the zip, verifies
 //   - a direct .zip URL (legacy) — downloads and verifies directly
 //
-// If pubKey is nil, signature verification is skipped.
+// If pubKey is nil, signature verification is skipped. Prefer
+// LoadWithTrust in production code — it enforces the embedded
+// approved+revoked trust store rather than a single caller-supplied key.
 func Load(ctx context.Context, u string, pubKey []byte) (*Bundle, error) {
+	v := &singleKeyVerifier{pubKey: pubKey}
 	if strings.HasSuffix(u, ".zip") {
-		return loadZip(ctx, u, pubKey)
+		return loadZip(ctx, u, v)
 	}
-	return loadIndex(ctx, u, pubKey)
+	return loadIndex(ctx, u, v)
 }
 
-func loadIndex(ctx context.Context, indexURL string, pubKey []byte) (*Bundle, error) {
+// LoadWithTrust is the production entry point: verification uses the
+// embedded approved/revoked trust store. A bundle signed by a revoked
+// key fails loudly; a bundle signed by an unknown key fails too. There
+// is no escape hatch at runtime — rotating trust requires a new binary.
+func LoadWithTrust(ctx context.Context, u string, trust *munisign.Trust) (*Bundle, error) {
+	v := &trustVerifier{trust: trust}
+	if strings.HasSuffix(u, ".zip") {
+		return loadZip(ctx, u, v)
+	}
+	return loadIndex(ctx, u, v)
+}
+
+// verifier lets loader choose between legacy single-key and trust-store
+// verification without duplicating the download plumbing.
+type verifier interface {
+	verify(fsys fs.FS) (*munisign.Verification, error)
+	// skip reports whether verification is a no-op (legacy dev mode
+	// that passed pubKey=nil). The new trust-store path never skips.
+	skip() bool
+}
+
+type singleKeyVerifier struct{ pubKey []byte }
+
+func (s *singleKeyVerifier) skip() bool { return s.pubKey == nil }
+func (s *singleKeyVerifier) verify(fsys fs.FS) (*munisign.Verification, error) {
+	return munisign.VerifyFS(fsys, s.pubKey)
+}
+
+type trustVerifier struct{ trust *munisign.Trust }
+
+func (t *trustVerifier) skip() bool { return t.trust == nil }
+func (t *trustVerifier) verify(fsys fs.FS) (*munisign.Verification, error) {
+	return munisign.VerifyFSWithTrust(fsys, t.trust)
+}
+
+func loadIndex(ctx context.Context, indexURL string, v verifier) (*Bundle, error) {
 	idx, err := FetchIndex(ctx, indexURL)
 	if err != nil {
 		return nil, err
@@ -56,7 +94,7 @@ func loadIndex(ctx context.Context, indexURL string, pubKey []byte) (*Bundle, er
 		return nil, err
 	}
 
-	b, err := loadZip(ctx, bundleURL, pubKey)
+	b, err := loadZip(ctx, bundleURL, v)
 	if err != nil {
 		return nil, err
 	}
@@ -71,21 +109,21 @@ func loadIndex(ctx context.Context, indexURL string, pubKey []byte) (*Bundle, er
 	return b, nil
 }
 
-func loadZip(ctx context.Context, zipURL string, pubKey []byte) (*Bundle, error) {
+func loadZip(ctx context.Context, zipURL string, v verifier) (*Bundle, error) {
 	fsys, err := zipfs.Fetch(ctx, zipURL)
 	if err != nil {
 		return nil, fmt.Errorf("muni: download: %w", err)
 	}
 
-	var v *munisign.Verification
-	if pubKey != nil {
-		v, err = munisign.VerifyFS(fsys, pubKey)
+	var ver *munisign.Verification
+	if !v.skip() {
+		ver, err = v.verify(fsys)
 		if err != nil {
 			return nil, fmt.Errorf("muni: verify: %w", err)
 		}
 	}
 
-	return &Bundle{FS: fsys, Verification: v}, nil
+	return &Bundle{FS: fsys, Verification: ver}, nil
 }
 
 func truncate(s string, n int) string {

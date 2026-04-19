@@ -1,0 +1,89 @@
+# Smoke test stack — a "prod-like" ThunderCitizen on non-standard ports so
+# it can run alongside `docker-compose.yml` without collisions. Exercises
+# the signed-bundle download path end-to-end against the real DO Spaces
+# index, using the embedded keys/approved trust store baked into the
+# image at build time.
+#
+#   app → builds from local source (picks up keys/, migrations, CSS build)
+#         published on :7070 → 8080
+#   db  → plain postgres:16 (no PostGIS needed for muni smoke; transit
+#         recorder will log GTFS failures and keep going)
+#         published on :5437 → 5432
+#
+# Distinct from the dev stack in every dimension:
+#   - project name:   thundercitizen-smoke (vs thundercitizen)
+#   - host ports:     7070/5437 (vs 8080/5432)
+#   - data volume:    smoke_postgres_data (vs postgres_data)
+#   - ENVIRONMENT:    production (vs development)
+#   - MUNI_URL:       real DO Spaces index.json (vs file://)
+#
+# Usage:
+#
+#   # Fresh boot — wipe any prior smoke volume first, rebuild the image
+#   # so keys/ changes get re-embedded:
+#   docker compose -f docker-compose.smoke.yml down -v
+#   docker compose -f docker-compose.smoke.yml up --build
+#
+#   # Then inspect:
+#   open http://localhost:7070/
+#   open http://localhost:7070/data      # admin page with signer + merkle
+#   open http://localhost:7070/health
+#   docker compose -f docker-compose.smoke.yml logs -f app
+#
+# Shutdown (keeps volume):
+#   docker compose -f docker-compose.smoke.yml down
+# Shutdown (wipes volume — next boot is fully fresh):
+#   docker compose -f docker-compose.smoke.yml down -v
+
+name: thundercitizen-smoke
+
+services:
+  db:
+    # Must be postgis — migration 000001 creates the postgis + pg_trgm
+    # extensions before any schema runs.
+    image: postgis/postgis:16-3.4
+    container_name: thundercitizen-smoke-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: thundercitizen
+    volumes:
+      - smoke_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5437:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d thundercitizen"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: thundercitizen-smoke-app
+    ports:
+      - "7070:8080"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/thundercitizen?sslmode=disable
+      PORT: "8080"
+      # ENVIRONMENT=production flips the boot path:
+      #   - muni.LoadWithTrust() against the embedded keys/approved store
+      #   - fetches index.json from MUNI_URL (not the local data/muni dir)
+      #   - 24h fetch cache gate from muni_fetch_state (empty on fresh boot,
+      #     so the very first apply runs immediately)
+      ENVIRONMENT: production
+      # Real DO Spaces index published by `./bin/muni publish`.
+      MUNI_URL: https://thundercitizen.tor1.digitaloceanspaces.com/index.json
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health | grep -qx OK"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+volumes:
+  smoke_postgres_data:
