@@ -134,17 +134,42 @@ func CastExpressions(ctx context.Context, tx pgx.Tx, table string, header []stri
 	return exprs, nil
 }
 
-// SimpleUpsert is a generic INSERT FROM staging with ON CONFLICT DO NOTHING.
-// Works for plugins whose target table has a natural key (or accepts duplicates).
-func SimpleUpsert(ctx context.Context, tx pgx.Tx, table, stagingTable string, header []string) error {
+// UpsertFromStaging generates INSERT INTO table FROM staging with
+// ON CONFLICT (conflictKeys) DO UPDATE — newer bundle values always win
+// for non-key columns. If conflictKeys is empty, falls back to
+// ON CONFLICT DO NOTHING (e.g. when the caller has already resolved
+// deduplication via a custom JOIN-based insert).
+func UpsertFromStaging(ctx context.Context, tx pgx.Tx, table, stagingTable string, header, conflictKeys []string) error {
 	casts, err := CastExpressions(ctx, tx, table, header)
 	if err != nil {
 		return err
 	}
 	colList := quotedCols(header)
+
+	conflict := "ON CONFLICT DO NOTHING"
+	if len(conflictKeys) > 0 {
+		keySet := make(map[string]bool, len(conflictKeys))
+		for _, k := range conflictKeys {
+			keySet[k] = true
+		}
+		var setClauses []string
+		for _, c := range header {
+			if keySet[c] {
+				continue
+			}
+			setClauses = append(setClauses, fmt.Sprintf(`"%s" = EXCLUDED."%s"`, c, c))
+		}
+		if len(setClauses) == 0 {
+			conflict = fmt.Sprintf("ON CONFLICT (%s) DO NOTHING", quotedCols(conflictKeys))
+		} else {
+			conflict = fmt.Sprintf("ON CONFLICT (%s) DO UPDATE SET %s",
+				quotedCols(conflictKeys), strings.Join(setClauses, ", "))
+		}
+	}
+
 	_, err = tx.Exec(ctx, fmt.Sprintf(
-		`INSERT INTO %s (%s) SELECT %s FROM %s s ON CONFLICT DO NOTHING`,
-		table, colList, strings.Join(casts, ", "), stagingTable))
+		`INSERT INTO %s (%s) SELECT %s FROM %s s %s`,
+		table, colList, strings.Join(casts, ", "), stagingTable, conflict))
 	if err != nil {
 		return fmt.Errorf("INSERT INTO %s: %w", table, err)
 	}

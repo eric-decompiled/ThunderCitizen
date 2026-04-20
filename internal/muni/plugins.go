@@ -67,7 +67,7 @@ func (CouncillorsPlugin) Apply(ctx context.Context, tx pgx.Tx, fsys fs.FS, ds Da
 	if err != nil {
 		return 0, err
 	}
-	return ds.Rows, SimpleUpsert(ctx, tx, ds.Table, "muni_staging", header)
+	return ds.Rows, UpsertFromStaging(ctx, tx, ds.Table, "muni_staging", header, []string{"name", "term"})
 }
 
 // ─── Council meetings ───────────────────────────────────────────────────
@@ -115,7 +115,7 @@ func (CouncilMeetingsPlugin) Apply(ctx context.Context, tx pgx.Tx, fsys fs.FS, d
 	if err != nil {
 		return 0, err
 	}
-	return ds.Rows, SimpleUpsert(ctx, tx, ds.Table, "muni_staging", header)
+	return ds.Rows, UpsertFromStaging(ctx, tx, ds.Table, "muni_staging", header, []string{"id"})
 }
 
 // ─── Council motions ────────────────────────────────────────────────────
@@ -163,8 +163,7 @@ func (CouncilMotionsPlugin) Apply(ctx context.Context, tx pgx.Tx, fsys fs.FS, ds
 	if err != nil {
 		return 0, err
 	}
-	// ON CONFLICT (meeting_id, motion_index) DO NOTHING — natural key dedup.
-	return ds.Rows, SimpleUpsert(ctx, tx, ds.Table, "muni_staging", header)
+	return ds.Rows, UpsertFromStaging(ctx, tx, ds.Table, "muni_staging", header, []string{"meeting_id", "motion_index"})
 }
 
 // ─── Council vote records ───────────────────────────────────────────────
@@ -258,7 +257,7 @@ func (BudgetAccountsPlugin) Apply(ctx context.Context, tx pgx.Tx, fsys fs.FS, ds
 	if err != nil {
 		return 0, err
 	}
-	return ds.Rows, SimpleUpsert(ctx, tx, ds.Table, "muni_staging", header)
+	return ds.Rows, UpsertFromStaging(ctx, tx, ds.Table, "muni_staging", header, []string{"code"})
 }
 
 // ─── Budget ledger ──────────────────────────────────────────────────────
@@ -296,5 +295,5 @@ func (BudgetLedgerPlugin) Apply(ctx context.Context, tx pgx.Tx, fsys fs.FS, ds D
 	if err != nil {
 		return 0, err
 	}
-	return ds.Rows, SimpleUpsert(ctx, tx, ds.Table, "muni_staging", header)
+	return ds.Rows, UpsertFromStaging(ctx, tx, ds.Table, "muni_staging", header, []string{"source_hash"})
 }
