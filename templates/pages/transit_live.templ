@@ -28,7 +28,11 @@ func transitLayerGroups() []components.MapLayerGroup {
 }
 
 templ TransitLive(vm transit.LiveViewModel) {
-	@templates.Layout("Transit", "Live Thunder Bay Transit map — real-time bus positions, service alerts, cancellations, and stop-to-stop trip planning.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Transit",
+		Description: "Live Thunder Bay Transit map — real-time bus positions, service alerts, cancellations, and stop-to-stop trip planning.",
+		OGImage:     "/static/og/transit.png",
+	}) {
 		@components.TransitNav(components.TransitNavProps{Current: "map"})
 
 		<section class="route-panel" aria-label="Live transit map and routes">

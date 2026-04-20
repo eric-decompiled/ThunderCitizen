@@ -9,7 +9,10 @@ import (
 )
 
 templ NotFound(vm views.NotFoundViewModel) {
-	@templates.Layout("Not Found", "Page not found.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Not Found",
+		Description: "Page not found.",
+	}) {
 		<section class="nf-hero">
 			<!-- City clerk at the filing cabinet -->
 			<svg class="nf-clerk" viewBox="0 0 160 160" fill="none" aria-hidden="true">

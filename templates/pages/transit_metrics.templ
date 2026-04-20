@@ -70,7 +70,11 @@ var kpiTitles = map[string]string{
 }
 
 templ TransitMetrics(vm transit.MetricsViewModel) {
-	@templates.Layout("Transit — "+kpiTitles[vm.KPI], "Thunder Bay Transit "+kpiTitles[vm.KPI]+" — 7-day trend chart with per-route comparison and Morning, Midday, and Evening breakdown.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Transit — " + kpiTitles[vm.KPI],
+		Description: "Thunder Bay Transit " + kpiTitles[vm.KPI] + " — 7-day trend chart with per-route comparison and Morning, Midday, and Evening breakdown.",
+		OGImage:     "/static/og/transit.png",
+	}) {
 		@components.TransitNav(components.TransitNavProps{Current: "metrics"})
 
 		<section class="metrics-panel" aria-label="System performance metrics">

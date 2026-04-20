@@ -8,7 +8,11 @@ import (
 )
 
 templ CouncilMeeting(vm views.MeetingViewModel) {
-	@templates.Layout("Minutes", fmt.Sprintf("%s — Thunder Bay City Council meeting. %d motions with full text, vote breakdowns, and media coverage.", vm.Date, vm.SubstantiveCount)) {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Minutes",
+		Description: fmt.Sprintf("%s — Thunder Bay City Council meeting. %d motions with full text, vote breakdowns, and media coverage.", vm.Date, vm.SubstantiveCount),
+		OGImage:     "/static/og/minutes.png",
+	}) {
 		@components.HeroStats(components.HeroStatsProps{
 			Title: vm.Date,
 			Footer: meetingDetailFooter(vm),

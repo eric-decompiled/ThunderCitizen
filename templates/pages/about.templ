@@ -6,7 +6,10 @@ import (
 )
 
 templ About() {
-	@templates.Layout("About", "Thunder Citizen is an independent project collecting Thunder Bay's transit, council, and budget data from public sources.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "About",
+		Description: "Thunder Citizen is an independent project collecting Thunder Bay's transit, council, and budget data from public sources.",
+	}) {
 		@components.PageHeader(components.PageHeaderProps{
 			Title: "About",
 		})

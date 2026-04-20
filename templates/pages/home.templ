@@ -40,7 +40,11 @@ templ nextMeetingCard(m views.NextMeeting) {
 }
 
 templ Home(vm views.HomeViewModel) {
-	@templates.Layout("Home", "Thunder Bay's civic data in one place — transit tracking, council votes, the budget and more.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Home",
+		Description: "Thunder Bay's civic data in one place — transit tracking, council votes, the budget and more.",
+		OGImage:     "/static/og/home.png",
+	}) {
 		<div class="home">
 		<section class="home-hero">
 			<h1>{ vm.Hero.Title }</h1>

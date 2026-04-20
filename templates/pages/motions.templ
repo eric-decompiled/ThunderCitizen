@@ -8,7 +8,11 @@ import (
 )
 
 templ Council(vm views.CouncilViewModel) {
-	@templates.Layout("Minutes", "Every Thunder Bay city council meeting, searchable — motion summaries, recorded votes, and headline decisions from each session.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Minutes",
+		Description: "Every Thunder Bay city council meeting, searchable — motion summaries, recorded votes, and headline decisions from each session.",
+		OGImage:     "/static/og/minutes.png",
+	}) {
 		@components.YearSelector(components.YearSelectorProps{
 			Years:     []int{2022},
 			Current:   vm.Filter.TermYear,

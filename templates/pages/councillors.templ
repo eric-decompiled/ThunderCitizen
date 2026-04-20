@@ -85,7 +85,11 @@ templ accordionToggle() {
 }
 
 templ Councillors(vm views.CouncillorsViewModel) {
-	@templates.Layout("Councillors", "Thunder Bay's 13 city councillors — profiles, voting records across notable motions, and an interactive ward map.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Councillors",
+		Description: "Thunder Bay's 13 city councillors — profiles, voting records across notable motions, and an interactive ward map.",
+		OGImage:     "/static/og/councillors.png",
+	}) {
 		<div id="councillor-content">
 			@CouncillorsPartial(vm)
 		</div>

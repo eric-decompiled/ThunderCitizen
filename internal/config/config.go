@@ -20,6 +20,7 @@ type Config struct {
 	Environment string
 	PatchesURL  string
 	MuniURL     string
+	BaseURL     string
 }
 
 func Load() *Config {
@@ -29,6 +30,7 @@ func Load() *Config {
 		Environment: Secret("ENVIRONMENT", "development"),
 		PatchesURL:  Secret("PATCHES_URL", DataBaseURL+"/patches.zip"),
 		MuniURL:     Secret("MUNI_URL", DataBaseURL+"/index.json"),
+		BaseURL:     strings.TrimRight(Secret("BASE_URL", "http://localhost:8080"), "/"),
 	}
 }
 

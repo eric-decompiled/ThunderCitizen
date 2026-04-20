@@ -172,6 +172,10 @@ func main() {
 	// normalized buckets (/minutes/{id}, not /minutes/2026-03-17).
 	r.Use(metrics.Middleware)
 	r.Use(middleware.RequestLogger)
+	// Social stashes the canonical BaseURL + request path on the context
+	// so layout.templ can emit absolute og:url / og:image without every
+	// view model threading the request through.
+	r.Use(middleware.Social(cfg.BaseURL))
 	// In dev (and any non-"production" ENVIRONMENT), neutralize every
 	// Cache-Control header set by inner handlers so refreshing the dev
 	// browser always shows the latest work. In production this is a

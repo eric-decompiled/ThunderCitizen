@@ -1,23 +1,85 @@
 package templates
 
 import (
+	"context"
 	"strings"
 
 	"thundercitizen/internal/assets"
+	"thundercitizen/internal/middleware"
 )
 
-templ Layout(title, description string) {
+// SocialMeta is the per-page metadata feeding <title>, meta description,
+// Open Graph, and Twitter Card tags. Keep Description under ~160 chars.
+// OGImage is an optional path under /static/og/ (or an absolute URL); an
+// empty value falls back to /static/og/default.png.
+type SocialMeta struct {
+	Title       string
+	Description string
+	OGImage     string
+}
+
+// canonicalURL returns the absolute URL for the current request, built
+// from the BaseURL middleware stashed on ctx.
+func canonicalURL(ctx context.Context) string {
+	return middleware.BaseURLFrom(ctx) + middleware.PathFrom(ctx)
+}
+
+// ogImageURL returns an absolute URL for the OG image. When img is empty
+// (page didn't set one — 404s, /health, /data, etc.), it derives a path-
+// aware fallback from the section prefix so a 404 under /transit still
+// unfurls with the transit card instead of the generic home default.
+// Scrapers cache by URL, so this deliberately does not pass through the
+// assets fingerprinter — stable paths let preview caches survive deploys.
+func ogImageURL(ctx context.Context, img string) string {
+	if img == "" {
+		img = fallbackImageForPath(middleware.PathFrom(ctx))
+	}
+	if strings.HasPrefix(img, "http://") || strings.HasPrefix(img, "https://") {
+		return img
+	}
+	return middleware.BaseURLFrom(ctx) + img
+}
+
+func fallbackImageForPath(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/transit"):
+		return "/static/og/transit.png"
+	case strings.HasPrefix(path, "/minutes"), strings.HasPrefix(path, "/motions"):
+		return "/static/og/minutes.png"
+	case strings.HasPrefix(path, "/councillors"):
+		return "/static/og/councillors.png"
+	case strings.HasPrefix(path, "/budget"):
+		return "/static/og/budget.png"
+	default:
+		return "/static/og/default.png"
+	}
+}
+
+templ Layout(meta SocialMeta) {
 	<!DOCTYPE html>
 	<html lang="en" class="no-js">
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-			<title>{ title } - Thunder Citizen</title>
-			<meta name="description" content={ description }/>
-			<meta property="og:title" content={ title + " · Thunder Citizen" }/>
-			<meta property="og:description" content={ description }/>
+			<title>{ meta.Title } - Thunder Citizen</title>
+			<meta name="description" content={ meta.Description }/>
+			<link rel="canonical" href={ canonicalURL(ctx) }/>
+			<meta name="theme-color" content="#4a6100"/>
+			<meta property="og:site_name" content="Thunder Citizen"/>
+			<meta property="og:title" content={ meta.Title + " · Thunder Citizen" }/>
+			<meta property="og:description" content={ meta.Description }/>
 			<meta property="og:type" content="website"/>
-			<meta name="twitter:card" content="summary"/>
+			<meta property="og:url" content={ canonicalURL(ctx) }/>
+			<meta property="og:image" content={ ogImageURL(ctx, meta.OGImage) }/>
+			<meta property="og:image:width" content="1200"/>
+			<meta property="og:image:height" content="630"/>
+			<meta property="og:image:alt" content={ meta.Title + " — Thunder Citizen" }/>
+			<meta property="og:locale" content="en_CA"/>
+			<meta name="twitter:card" content="summary_large_image"/>
+			<meta name="twitter:title" content={ meta.Title + " · Thunder Citizen" }/>
+			<meta name="twitter:description" content={ meta.Description }/>
+			<meta name="twitter:image" content={ ogImageURL(ctx, meta.OGImage) }/>
+			<meta name="twitter:image:alt" content={ meta.Title + " — Thunder Citizen" }/>
 			<link rel="icon" href={ assets.URL("/static/favicon.svg") } type="image/svg+xml"/>
 			<link rel="stylesheet" href={ assets.URL("/static/css/style.css") }/>
 			<script>
@@ -103,11 +165,11 @@ document.documentElement.classList.remove('no-js');
 						<span class="nav-toggle-bar"></span>
 					</button>
 					<ul class="nav-links">
-						@navLink("/budget", "Budget", title)
-						@navLink("/councillors", "Councillors", title)
-						@navLink("/minutes", "Minutes", title)
-						@navLink("/transit", "Transit", title)
-						@navLink("/about", "About", title)
+						@navLink("/budget", "Budget", meta.Title)
+						@navLink("/councillors", "Councillors", meta.Title)
+						@navLink("/minutes", "Minutes", meta.Title)
+						@navLink("/transit", "Transit", meta.Title)
+						@navLink("/about", "About", meta.Title)
 					</ul>
 				</nav>
 				<script>
@@ -147,11 +209,11 @@ document.documentElement.classList.remove('no-js');
 				<div class="footer-inner">
 					<nav class="footer-nav" aria-label="Footer navigation">
 						<ul>
-							@footerLink("/budget", "Budget", title)
-							@footerLink("/councillors", "Councillors", title)
-							@footerLink("/minutes", "Minutes", title)
-							@footerLink("/transit", "Transit", title)
-							@footerLink("/about", "About", title)
+							@footerLink("/budget", "Budget", meta.Title)
+							@footerLink("/councillors", "Councillors", meta.Title)
+							@footerLink("/minutes", "Minutes", meta.Title)
+							@footerLink("/transit", "Transit", meta.Title)
+							@footerLink("/about", "About", meta.Title)
 						</ul>
 					</nav>
 					<p><a href="/" class="footer-brand"><strong>Thunder Citizen</strong></a> · Data for the People! (of&#160;Thunder&#160;Bay)</p>

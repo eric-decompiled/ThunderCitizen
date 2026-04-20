@@ -43,7 +43,11 @@ templ budgetExpandToggle() {
 }
 
 templ Budget(vm views.BudgetViewModel) {
-	@templates.Layout("Budget", "Thunder Bay's operating budget, visualized — trace where property tax dollars flow, by department and service.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Budget",
+		Description: "Thunder Bay's operating budget, visualized — trace where property tax dollars flow, by department and service.",
+		OGImage:     "/static/og/budget.png",
+	}) {
 		@components.YearSelector(components.YearSelectorProps{
 			Years:      vm.Years,
 			Current:    vm.Year,

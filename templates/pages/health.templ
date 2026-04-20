@@ -37,7 +37,10 @@ func ghcrPackageURL(image string) string {
 }
 
 templ Health(vm system.HealthViewModel) {
-	@templates.Layout("Health", "Thunder Citizen system health and data freshness status.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Health",
+		Description: "Thunder Citizen system health and data freshness status.",
+	}) {
 		@components.PageHeader(components.PageHeaderProps{
 			Title: "Health",
 		})

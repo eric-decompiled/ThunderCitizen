@@ -13,7 +13,10 @@ import (
 )
 
 templ DataPacks(vm system.DataPacksViewModel) {
-	@templates.Layout("Data", "Installed data packs, bundle status, and trust store for Thunder Citizen's signed data pipeline.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Data",
+		Description: "Installed data packs, bundle status, and trust store for Thunder Citizen's signed data pipeline.",
+	}) {
 		@DataPacksPartial(vm)
 		<script src={ assets.URL("/static/vendor/d3.min.js") }></script>
 		<script src={ assets.URL("/static/data/data-treemap.js") }></script>

@@ -7,7 +7,11 @@ import (
 )
 
 templ TransitMethod(vm transit.MethodViewModel) {
-	@templates.Layout("Transit — Method", "How Thunder Bay Transit performance is measured — OTP, excess wait time, headway reliability, and the GTFS data behind each metric.") {
+	@templates.Layout(templates.SocialMeta{
+		Title:       "Transit — Method",
+		Description: "How Thunder Bay Transit performance is measured — OTP, excess wait time, headway reliability, and the GTFS data behind each metric.",
+		OGImage:     "/static/og/transit.png",
+	}) {
 		@components.TransitNav(components.TransitNavProps{Current: "method"})
 		@transitMethodology()
 		@transitDataCollection(vm)

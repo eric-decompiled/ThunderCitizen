@@ -45,6 +45,7 @@
 #        ACME_EMAIL=ops@thundercitizen.ca     # default if unset
 #        POSTGRES_USER=thundercitizen         # default if unset
 #        POSTGRES_DB=thundercitizen           # default if unset
+#        BASE_URL=https://thundercitizen.ca   # default if unset
 #        # Pin to a specific build for reproducibility. `latest` and `main`
 #        # move with each push to main; `sha-<short>` is immutable.
 #        TC_IMAGE_TAG=sha-3d84894             # default: latest
@@ -282,6 +283,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-thundercitizen}
       PORT: "8080"
       ENVIRONMENT: production
+      # Canonical public origin used to build absolute og:url / og:image
+      # URLs for link-preview scrapers (Slack, Discord, Facebook, Twitter,
+      # LinkedIn, iMessage). Override in .env for staging deploys:
+      #   BASE_URL=https://staging.thundercitizen.ca
+      BASE_URL: ${BASE_URL:-https://thundercitizen.ca}
       # Surfaced on /health so operators can see exactly which image is
       # running. Docker doesn't expose the running image ref to the
       # container, so we bake it in at compose parse time from the
