@@ -38,8 +38,10 @@ templ CouncilMeeting(vm views.MeetingViewModel) {
 					<p class="stat-label">Notable</p>
 				</button>
 			</div>
-			if vm.Summary != "" {
-				<p class="hero-stats-lead">{ vm.Summary }</p>
+		}
+		if vm.Summary != "" {
+			@components.Card(components.CardProps{Title: "Summary"}) {
+				<p class="meeting-summary-text">{ vm.Summary }</p>
 			}
 		}
 		<div id="motion-filter-target" data-filter="all">

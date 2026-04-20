@@ -171,11 +171,12 @@
   margin: 0.5rem 0 0;
 }
 
-.meeting-summary {
-  font-size: 0.85rem;
-  color: var(--thunder-600);
-  margin: 0.25rem 0 0;
-  line-height: 1.4;
+.meeting-summary-text {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--thunder-800);
+  line-height: 1.55;
+  margin: 0;
 }
 
 .motion-summary {
@@ -281,10 +282,15 @@
 
 .meeting-row-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem 0.5rem;
   font-size: 0.7rem;
   color: var(--thunder-500);
+
+  @media (max-width: 600px) {
+    justify-content: flex-end;
+  }
 }
 
 .meeting-row-date {
@@ -295,6 +301,10 @@
   &::before {
     content: "·";
     margin-right: 0.5rem;
+  }
+
+  @media (max-width: 600px) {
+    margin-right: auto;
   }
 }
 
@@ -312,6 +322,10 @@
     margin-left: auto;
 
     &:hover { filter: brightness(1.1); }
+
+    @media (max-width: 600px) {
+      margin-left: 0;
+    }
   }
 }
 
