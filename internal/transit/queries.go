@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -365,32 +366,78 @@ func CancelIncidents(ctx context.Context, db *pgxpool.Pool) ([]CancelIncident, e
 // matches the displayed schedule instead of spilling today's cancellations
 // onto a week-old view.
 func CancelledTripDetails(ctx context.Context, db *pgxpool.Pool, date time.Time) (map[string][]CancelledTrip, error) {
+	rows, nowMin, err := queryCancelledTrips(ctx, db, date, "")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string][]CancelledTrip)
+	for rows.Next() {
+		ct, err := scanCancelledTrip(rows, nowMin)
+		if err != nil {
+			return nil, err
+		}
+		result[ct.RouteID] = append(result[ct.RouteID], ct)
+	}
+	return result, rows.Err()
+}
+
+// CancelledTripDetailsForRoute returns cancelled trips for a single route on
+// the given service date. Pushes the route filter into SQL so the scan is
+// index-covered by idx_transit_cancellation_route_start instead of scanning
+// every cancellation for the day and filtering in Go.
+func CancelledTripDetailsForRoute(ctx context.Context, db *pgxpool.Pool, date time.Time, routeID string) ([]CancelledTrip, error) {
+	rows, nowMin, err := queryCancelledTrips(ctx, db, date, routeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []CancelledTrip
+	for rows.Next() {
+		ct, err := scanCancelledTrip(rows, nowMin)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, ct)
+	}
+	return result, rows.Err()
+}
+
+// queryCancelledTrips issues the cancelled-trip query with an optional
+// route filter. Returns the live Rows (caller closes), the computed
+// "now minutes" used for Upcoming/LeadMin, and any error.
+func queryCancelledTrips(ctx context.Context, db *pgxpool.Pool, date time.Time, routeID string) (pgx.Rows, int, error) {
 	if date.IsZero() {
 		date = ServiceDate()
 	}
 	now := Now()
 	nowMin := now.Hour()*60 + now.Minute()
 	if now.Hour() < ServiceDayCutoffHour {
-		// Before cutoff, we're in the previous day's service — shift nowMin
-		// past 24:00 so upcoming/past comparison works for late-night trips.
 		nowMin += 24 * 60
 	}
 	svcDate := date.Format("20060102")
 
-	// Join to get the earliest feed_timestamp per trip (when the cancellation first appeared).
-	// Filter by service date so after midnight we still see the current service day's cancellations.
-	rows, err := db.Query(ctx, `
+	routeFilter := ""
+	args := []any{svcDate}
+	if routeID != "" {
+		routeFilter = " AND route_id = $2"
+		args = append(args, routeID)
+	}
+
+	sql := `
 		WITH latest AS (
 			SELECT DISTINCT ON (trip_id) trip_id, route_id, start_time
 			FROM transit.cancellation
-			WHERE start_date = $1
+			WHERE start_date = $1` + routeFilter + `
 			ORDER BY trip_id, feed_timestamp DESC
 		),
 		first_seen AS (
 			SELECT ec.trip_id, MIN(ec.feed_timestamp) AS first_feed,
 				COUNT(*) AS snapshot_count
 			FROM transit.cancellation ec
-			WHERE ec.start_date = $1
+			WHERE ec.start_date = $1` + routeFilter + `
 			GROUP BY ec.trip_id
 		)
 		SELECT l.route_id, l.trip_id, l.start_time, COALESCE(tc.headsign, ''),
@@ -403,38 +450,38 @@ func CancelledTripDetails(ctx context.Context, db *pgxpool.Pool, date time.Time)
 		LEFT JOIN transit.trip_catalog tc ON tc.trip_id = l.trip_id
 		LEFT JOIN first_seen fs ON fs.trip_id = l.trip_id
 		ORDER BY l.route_id, l.start_time
-	`, svcDate)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+	`
 
-	result := make(map[string][]CancelledTrip)
-	for rows.Next() {
-		var ct CancelledTrip
-		var seenMin *int
-		var seenTime *string
-		if err := rows.Scan(&ct.RouteID, &ct.TripID, &ct.StartTime, &ct.Headsign, &ct.EndTime, &seenMin, &seenTime, &ct.SnapshotCount); err != nil {
-			return nil, err
-		}
-		ct.StartTime = trimTime(ct.StartTime)
-		ct.EndTime = trimTime(ct.EndTime)
-		if seenTime != nil {
-			ct.FirstSeen = *seenTime
-		}
-		if len(ct.StartTime) >= 5 {
-			var h, m int
-			fmt.Sscanf(ct.StartTime, "%d:%d", &h, &m)
-			schedMin := h*60 + m
-			ct.Upcoming = schedMin > nowMin
-			if seenMin != nil {
-				ct.LeadMin = schedMin - *seenMin
-				ct.LeadLabel = leadLabel(ct.LeadMin)
-			}
-		}
-		result[ct.RouteID] = append(result[ct.RouteID], ct)
+	rows, err := db.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, 0, err
 	}
-	return result, rows.Err()
+	return rows, nowMin, nil
+}
+
+func scanCancelledTrip(rows pgx.Rows, nowMin int) (CancelledTrip, error) {
+	var ct CancelledTrip
+	var seenMin *int
+	var seenTime *string
+	if err := rows.Scan(&ct.RouteID, &ct.TripID, &ct.StartTime, &ct.Headsign, &ct.EndTime, &seenMin, &seenTime, &ct.SnapshotCount); err != nil {
+		return ct, err
+	}
+	ct.StartTime = trimTime(ct.StartTime)
+	ct.EndTime = trimTime(ct.EndTime)
+	if seenTime != nil {
+		ct.FirstSeen = *seenTime
+	}
+	if len(ct.StartTime) >= 5 {
+		var h, m int
+		fmt.Sscanf(ct.StartTime, "%d:%d", &h, &m)
+		schedMin := h*60 + m
+		ct.Upcoming = schedMin > nowMin
+		if seenMin != nil {
+			ct.LeadMin = schedMin - *seenMin
+			ct.LeadLabel = leadLabel(ct.LeadMin)
+		}
+	}
+	return ct, nil
 }
 
 func leadLabel(min int) string {
@@ -524,52 +571,149 @@ type UnifiedSchedule struct {
 
 // RouteTimepointSchedule builds schedule grids for timepoint stops on a route,
 // split by direction (headsign) so each direction gets its own stop columns.
+//
+// One query covers every direction. Rows come back ordered by headsign,
+// trip_id, stop_sequence — so within each direction, the lowest-trip_id
+// trip arrives first and defines that direction's canonical stop list.
+// This preserves the prior "representative trip = min(trip_id)" semantics
+// without the 1+2N round-trip pattern the old implementation used.
 func RouteTimepointSchedule(ctx context.Context, db *pgxpool.Pool, routeID string, date time.Time) ([]TimepointSchedule, error) {
-	// 1. Find distinct directions and a representative trip for each
-	dirRows, err := db.Query(ctx, `
-		WITH today_trips AS (
-			SELECT tc.trip_id, tc.headsign
-			FROM transit.trip_catalog tc
-			JOIN transit.service_calendar sc ON sc.service_id = tc.service_id
-			WHERE tc.route_id = $1 AND sc.date = $2
-		)
-		SELECT DISTINCT ON (headsign) headsign, trip_id
-		FROM today_trips
-		ORDER BY headsign, trip_id
+	rows, err := db.Query(ctx, `
+		SELECT
+			tc.headsign,
+			tc.trip_id,
+			ss.stop_id,
+			COALESCE(s.name, ss.stop_id) AS stop_name,
+			ss.stop_sequence,
+			COALESCE(ss.scheduled_departure, ss.scheduled_arrival) AS sched_time,
+			a.arrival_delay, a.departure_delay,
+			CASE WHEN cn.trip_id IS NOT NULL THEN TRUE ELSE FALSE END AS canceled
+		FROM transit.trip_catalog tc
+		JOIN transit.service_calendar sc ON sc.service_id = tc.service_id
+		JOIN transit.scheduled_stop ss
+			ON ss.trip_id = tc.trip_id AND ss.is_timepoint = true
+		LEFT JOIN transit.stop s ON s.stop_id = ss.stop_id
+		LEFT JOIN transit.stop_delay a
+			ON a.trip_id = tc.trip_id AND a.stop_id = ss.stop_id AND a.date = $2
+		LEFT JOIN transit.cancellation cn
+			ON cn.trip_id = tc.trip_id AND cn.feed_timestamp::DATE = $2
+		WHERE tc.route_id = $1 AND sc.date = $2
+		ORDER BY tc.headsign, tc.trip_id, ss.stop_sequence
 	`, routeID, date)
 	if err != nil {
 		return nil, err
 	}
-	defer dirRows.Close()
+	defer rows.Close()
 
-	type direction struct {
-		headsign string
-		tripID   string
+	type dirBuilder struct {
+		headsign  string
+		stops     []TimepointStop
+		stopIndex map[string]int
+		tripMap   map[string]*TimepointTrip
+		tripOrder []string
+		firstTrip string
 	}
-	var dirs []direction
-	for dirRows.Next() {
-		var d direction
-		if err := dirRows.Scan(&d.headsign, &d.tripID); err != nil {
+	dirMap := map[string]*dirBuilder{}
+	var dirOrder []string
+
+	for rows.Next() {
+		var (
+			headsign, tripID, stopID, stopName, schedTime string
+			seq                                           int
+			delaySec, depDelay                            *int
+			canceled                                      bool
+		)
+		if err := rows.Scan(&headsign, &tripID, &stopID, &stopName, &seq, &schedTime, &delaySec, &depDelay, &canceled); err != nil {
 			return nil, err
 		}
-		dirs = append(dirs, d)
+
+		d, ok := dirMap[headsign]
+		if !ok {
+			d = &dirBuilder{
+				headsign:  headsign,
+				stopIndex: map[string]int{},
+				tripMap:   map[string]*TimepointTrip{},
+			}
+			dirMap[headsign] = d
+			dirOrder = append(dirOrder, headsign)
+		}
+
+		// First trip encountered for this direction (lowest trip_id via ORDER BY)
+		// defines the canonical stop list. Subsequent trips map onto it; any stop
+		// not in the rep's list is dropped — matching the prior buildDirectionSchedule
+		// behavior.
+		if d.firstTrip == "" {
+			d.firstTrip = tripID
+		}
+		if tripID == d.firstTrip {
+			if _, seen := d.stopIndex[stopID]; !seen {
+				d.stopIndex[stopID] = len(d.stops)
+				d.stops = append(d.stops, TimepointStop{
+					StopID: stopID, StopName: stopName, Sequence: seq,
+				})
+			}
+		}
+
+		trip, ok := d.tripMap[tripID]
+		if !ok {
+			trip = &TimepointTrip{
+				TripID:   tripID,
+				Headsign: headsign,
+				Canceled: canceled,
+			}
+			d.tripMap[tripID] = trip
+			d.tripOrder = append(d.tripOrder, tripID)
+		}
+
+		idx, ok := d.stopIndex[stopID]
+		if !ok {
+			continue
+		}
+		// Lazy-grow the trip's stops slice. We don't know the direction's stop
+		// count until the first trip is fully seen, but by the time we start
+		// scanning the second trip, the rep trip is finalized.
+		for len(trip.Stops) <= idx {
+			trip.Stops = append(trip.Stops, TripTimepoint{})
+		}
+		trip.Stops[idx] = TripTimepoint{
+			ScheduledTime:  trimTime(schedTime),
+			DelaySec:       delaySec,
+			DepartureDelay: depDelay,
+		}
 	}
-	if err := dirRows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if len(dirs) == 0 {
+
+	if len(dirOrder) == 0 {
 		return nil, nil
 	}
 
 	var schedules []TimepointSchedule
-	for _, dir := range dirs {
-		sched, err := buildDirectionSchedule(ctx, db, routeID, date, dir.headsign, dir.tripID)
-		if err != nil {
-			return nil, err
+	for _, headsign := range dirOrder {
+		d := dirMap[headsign]
+		if len(d.tripOrder) == 0 {
+			continue
 		}
-		if sched != nil && len(sched.Trips) > 0 {
-			schedules = append(schedules, *sched)
+		// Pad every trip to the direction's full stop count.
+		trips := make([]TimepointTrip, 0, len(d.tripOrder))
+		for _, id := range d.tripOrder {
+			t := d.tripMap[id]
+			for len(t.Stops) < len(d.stops) {
+				t.Stops = append(t.Stops, TripTimepoint{})
+			}
+			trips = append(trips, *t)
 		}
+		// Sort trips by earliest scheduled time, matching the prior per-direction
+		// query's `ORDER BY sched_time, tc.trip_id`.
+		sort.Slice(trips, func(i, j int) bool {
+			return firstTime(trips[i]) < firstTime(trips[j])
+		})
+		schedules = append(schedules, TimepointSchedule{
+			Headsign: headsign,
+			Stops:    d.stops,
+			Trips:    trips,
+		})
 	}
 
 	// Merge small directions (< 3 trips) into the best-matching main direction.
@@ -754,104 +898,4 @@ func firstTime(t TimepointTrip) string {
 		}
 	}
 	return "99:99"
-}
-
-func buildDirectionSchedule(ctx context.Context, db *pgxpool.Pool, routeID string, date time.Time, headsign, repTripID string) (*TimepointSchedule, error) {
-	// 1. Get timepoint stops from the representative trip
-	tpRows, err := db.Query(ctx, `
-		SELECT ss.stop_id, COALESCE(s.name, ss.stop_id), ss.stop_sequence
-		FROM transit.scheduled_stop ss
-		LEFT JOIN transit.stop s ON s.stop_id = ss.stop_id
-		WHERE ss.trip_id = $1 AND ss.is_timepoint = true
-		ORDER BY ss.stop_sequence
-	`, repTripID)
-	if err != nil {
-		return nil, err
-	}
-	defer tpRows.Close()
-
-	var stops []TimepointStop
-	stopIndex := map[string]int{}
-	for tpRows.Next() {
-		var s TimepointStop
-		if err := tpRows.Scan(&s.StopID, &s.StopName, &s.Sequence); err != nil {
-			return nil, err
-		}
-		stopIndex[s.StopID] = len(stops)
-		stops = append(stops, s)
-	}
-	if err := tpRows.Err(); err != nil {
-		return nil, err
-	}
-	if len(stops) == 0 {
-		return nil, nil
-	}
-
-	// 2. Get all trips for this direction with timepoint stop times and actual delays
-	rows, err := db.Query(ctx, `
-		SELECT
-			tc.trip_id, tc.headsign,
-			ss.stop_id,
-			COALESCE(ss.scheduled_departure, ss.scheduled_arrival) AS sched_time,
-			a.arrival_delay, a.departure_delay,
-			CASE WHEN cn.trip_id IS NOT NULL THEN TRUE ELSE FALSE END AS canceled
-		FROM transit.trip_catalog tc
-		JOIN transit.service_calendar sc ON sc.service_id = tc.service_id
-		JOIN transit.scheduled_stop ss
-			ON ss.trip_id = tc.trip_id AND ss.is_timepoint = true
-		LEFT JOIN transit.stop_delay a
-			ON a.trip_id = tc.trip_id AND a.stop_id = ss.stop_id AND a.date = $2
-		LEFT JOIN transit.cancellation cn
-			ON cn.trip_id = tc.trip_id AND cn.feed_timestamp::DATE = $2
-		WHERE tc.route_id = $1 AND tc.headsign = $3 AND sc.date = $2
-		ORDER BY sched_time, tc.trip_id, ss.stop_sequence
-	`, routeID, date, headsign)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	tripMap := map[string]*TimepointTrip{}
-	var tripOrder []string
-	for rows.Next() {
-		var tripID, hs, stopID, schedTime string
-		var delaySec, depDelay *int
-		var canceled bool
-		if err := rows.Scan(&tripID, &hs, &stopID, &schedTime, &delaySec, &depDelay, &canceled); err != nil {
-			return nil, err
-		}
-
-		trip, ok := tripMap[tripID]
-		if !ok {
-			trip = &TimepointTrip{
-				TripID:   tripID,
-				Headsign: hs,
-				Canceled: canceled,
-				Stops:    make([]TripTimepoint, len(stops)),
-			}
-			tripMap[tripID] = trip
-			tripOrder = append(tripOrder, tripID)
-		}
-
-		idx, ok := stopIndex[stopID]
-		if !ok {
-			continue
-		}
-		schedTime = trimTime(schedTime)
-		trip.Stops[idx] = TripTimepoint{
-			ScheduledTime:  schedTime,
-			DelaySec:       delaySec,
-			DepartureDelay: depDelay,
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	trips := make([]TimepointTrip, len(tripOrder))
-	for i, id := range tripOrder {
-		trips[i] = *tripMap[id]
-	}
-
-	return &TimepointSchedule{Headsign: headsign, Stops: stops, Trips: trips}, nil
 }

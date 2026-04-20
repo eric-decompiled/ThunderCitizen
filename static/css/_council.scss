@@ -646,9 +646,18 @@
   top: calc(var(--year-selector-h) + var(--search-bar-h));
   z-index: 10;
   @extend %frosted-glass;
+  // Override the solid fallback that %frosted-glass applies inside .term-panel —
+  // this bar bleeds to full width so backdrop-filter works fine, matching
+  // .minutes-search-bar above it.
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--glass-border);
-  padding: 0.4rem var(--page-gutter-x);
-  margin: 0 calc(var(--page-gutter-x) * -1);
+  // Match .minutes-search-bar full-bleed so the toolbar edges align with the
+  // search bar above it (bleeds through both term-panel-body + Pico article padding).
+  --_bleed: calc(var(--space-3) + var(--pico-block-spacing-horizontal, 1rem));
+  padding: 0.4rem var(--_bleed);
+  margin: 0 calc(var(--_bleed) * -1);
 }
 
 .meeting-filters {

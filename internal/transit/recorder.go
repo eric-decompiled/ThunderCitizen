@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"thundercitizen/internal/logger"
+	"thundercitizen/internal/transit/gtfsrt"
 )
 
 // FeedStats is a point-in-time snapshot of one GTFS-RT feed's polling
@@ -117,6 +118,13 @@ type Recorder struct {
 	tracker *vehicleTracker
 	trips   *TripCache
 	stats   *recorderStats
+
+	// lastTripFeed holds the most recent parsed trip-updates FeedMessage so
+	// the stop-predictions handler can read live stop-time updates without
+	// re-fetching from the upstream API. Updated at the end of each
+	// successful recordTrips poll (every ~60s).
+	mu           sync.RWMutex
+	lastTripFeed *gtfsrt.FeedMessage
 }
 
 // NewRecorder creates a recorder with the given database pool. The trip cache
@@ -255,12 +263,17 @@ func (r *Recorder) recordVehicles(ctx context.Context) (time.Time, error) {
 }
 
 // recordTrips fetches trip updates and writes cancellations and per-stop
-// delays as events.
+// delays as events. Also stashes the raw FeedMessage so stop predictions
+// can serve from it without re-hitting the upstream API.
 func (r *Recorder) recordTrips(ctx context.Context) (time.Time, error) {
-	feed, err := r.client.FetchTrips(ctx)
+	feed, raw, err := r.client.FetchTrips(ctx)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("fetch: %w", err)
 	}
+
+	r.mu.Lock()
+	r.lastTripFeed = raw
+	r.mu.Unlock()
 
 	if len(feed.Cancellations) > 0 {
 		if err := r.insertTripCancellations(ctx, feed.Cancellations); err != nil {
@@ -275,6 +288,18 @@ func (r *Recorder) recordTrips(ctx context.Context) (time.Time, error) {
 	}
 
 	return feed.Timestamp, nil
+}
+
+// LastTripFeed returns the most recently fetched trip-updates FeedMessage,
+// or nil if the recorder hasn't completed a successful poll yet. Callers
+// MUST treat the returned pointer as read-only — it's shared across goroutines.
+func (r *Recorder) LastTripFeed() *gtfsrt.FeedMessage {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.lastTripFeed
 }
 
 // recordAlerts fetches service alerts and writes them as events.

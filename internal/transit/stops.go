@@ -51,20 +51,26 @@ type StopPredictionsResponse struct {
 }
 
 func StopPredictions(ctx context.Context, db *pgxpool.Pool, client *Client, stopID string, now time.Time) (StopPredictionsResponse, error) {
-	// 1. Fetch the raw GTFS-RT feed (we need the full protobuf, not the parsed version)
 	feed, err := client.fetchFeed(ctx, TripFeedPath)
 	if err != nil {
 		return StopPredictionsResponse{}, fmt.Errorf("fetch trip updates: %w", err)
 	}
+	return StopPredictionsFromFeed(ctx, db, feed, stopID, now)
+}
+
+// StopPredictionsFromFeed produces predictions from an already-fetched feed.
+// Used on the hot path where the recorder's trip poller has a fresh copy in
+// memory — skips the upstream HTTP round-trip.
+func StopPredictionsFromFeed(ctx context.Context, db *pgxpool.Pool, feed *gtfsrt.FeedMessage, stopID string, now time.Time) (StopPredictionsResponse, error) {
 	feedTS := feedTimestamp(feed)
 
-	// 2. Load route display info from DB
+	// Load route display info from DB
 	routeInfo, err := loadRouteDisplayInfo(ctx, db)
 	if err != nil {
 		return StopPredictionsResponse{}, err
 	}
 
-	// 3. Scan all trip updates for StopTimeUpdates matching our stop
+	// Scan all trip updates for StopTimeUpdates matching our stop
 	var predictions []StopPrediction
 
 	for _, entity := range feed.Entity {

@@ -153,7 +153,7 @@ func main() {
 				ToLat: toLat, ToLon: toLon,
 			}).Render
 		},
-	})
+	}, recorder)
 	th.VehicleStream.Start(transitCtx)
 
 	h := handlers.New(db, recorder)

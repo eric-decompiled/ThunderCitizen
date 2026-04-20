@@ -27,6 +27,7 @@ type Service struct {
 	db         *pgxpool.Pool
 	reporter   *Reporter
 	stream     *VehicleStream
+	recorder   *Recorder
 	cache      *RepoCache
 	ChunkCache *ChunkCache
 
@@ -42,14 +43,17 @@ type liveData struct {
 	noService []string
 }
 
-// NewService creates a transit service with its dependencies.
-func NewService(db *pgxpool.Pool) *Service {
+// NewService creates a transit service with its dependencies. Pass the
+// recorder so stop predictions can serve from its in-memory trip feed
+// instead of re-fetching from the upstream API.
+func NewService(db *pgxpool.Pool, recorder *Recorder) *Service {
 	client := NewClient()
 	reporter := NewReporter(db, client)
 	return &Service{
 		db:         db,
 		reporter:   reporter,
 		stream:     NewVehicleStream(client, db, 6*time.Second),
+		recorder:   recorder,
 		cache:      NewRepoCache(reporter),
 		ChunkCache: NewChunkCache(db),
 	}
@@ -256,9 +260,24 @@ func (s *Service) RouteTrackingStats(ctx context.Context, routeID string) (total
 // Reporter delegation
 // ---------------------------------------------------------------------------
 
-// StopPredictions returns arrival predictions for a stop.
+// StopPredictions returns arrival predictions for a stop. Prefers the
+// recorder's in-memory trip feed (refreshed every ~60s by the trips
+// poller) so the hot path avoids a synchronous upstream HTTP fetch.
+// Falls back to a direct client fetch only on cold boot, before the
+// recorder has completed its first poll.
 func (s *Service) StopPredictions(ctx context.Context, stopID string) (StopPredictionsResponse, error) {
-	return s.reporter.StopPredictionsReport(ctx, stopID)
+	feed := s.recorder.LastTripFeed()
+	if feed == nil {
+		return s.reporter.StopPredictionsReport(ctx, stopID)
+	}
+	resp, err := StopPredictionsFromFeed(ctx, s.reporter.db, feed, stopID, Now())
+	if err != nil {
+		return StopPredictionsResponse{}, err
+	}
+	if resp.Predictions == nil {
+		resp.Predictions = []StopPrediction{}
+	}
+	return resp, nil
 }
 
 // TripPlan runs a depart-at trip plan.

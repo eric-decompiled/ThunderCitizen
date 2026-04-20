@@ -132,15 +132,15 @@ type RouteDisplay struct {
 	LongName  string
 }
 
-// RouteDisplayInfo returns display metadata for all routes.
+// RouteDisplayInfo returns display metadata for all routes. No ORDER BY —
+// every caller keys these into a map by route_id, so sort order is never
+// observed. A regex-based sort here was visibly in the stop-predictions hot
+// path at ~70ms per call.
 func (r *Repo) RouteDisplayInfo(ctx context.Context) ([]RouteDisplay, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT route_id, COALESCE(NULLIF(short_name, ''), route_id) AS short_name,
 		       color, long_name
-		FROM transit.route
-		ORDER BY
-		  CAST(NULLIF(REGEXP_REPLACE(route_id, '[^0-9]', '', 'g'), '') AS INT) NULLS LAST,
-		  REGEXP_REPLACE(route_id, '[0-9]', '', 'g')`)
+		FROM transit.route`)
 	if err != nil {
 		return nil, err
 	}

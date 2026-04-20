@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/sync/errgroup"
 
 	"thundercitizen/internal/cache"
 	"thundercitizen/internal/httperr"
@@ -47,9 +48,11 @@ type Handler struct {
 	VehicleStream *VehicleStream
 }
 
-// NewHandler creates a transit handler backed by a Service.
-func NewHandler(db *pgxpool.Pool, render Renderer) *Handler {
-	svc := NewService(db)
+// NewHandler creates a transit handler backed by a Service. The recorder is
+// threaded through so stop predictions can read the live trip feed from its
+// in-memory snapshot.
+func NewHandler(db *pgxpool.Pool, render Renderer, recorder *Recorder) *Handler {
+	svc := NewService(db, recorder)
 	return &Handler{
 		svc:           svc,
 		render:        render,
@@ -254,17 +257,69 @@ func (h *Handler) routePage(w http.ResponseWriter, r *http.Request) {
 		if !schedDate.IsZero() {
 			date = schedDate
 		}
-		info, err := h.svc.RouteInfo(r.Context(), routeID)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		tp, err := h.svc.RouteTimepointSchedule(r.Context(), routeID, date)
-		if err != nil {
+
+		// All six fetches below are independent. Run them concurrently so
+		// wall-clock time collapses to the slowest single query instead of
+		// the sum. RouteInfo is the only one whose error 404s; the rest
+		// surface 500 or silently render empty.
+		var (
+			info          *RouteInfo
+			tp            []TimepointSchedule
+			totalTrips    int
+			since         string
+			serviceDays   map[string]bool
+			cancelDays    map[string]int
+			cancelledList []CancelledTrip
+		)
+		g, ctx := errgroup.WithContext(r.Context())
+		g.Go(func() error {
+			v, err := h.svc.RouteInfo(ctx, routeID)
+			if err != nil {
+				return err
+			}
+			info = v
+			return nil
+		})
+		g.Go(func() error {
+			v, err := h.svc.RouteTimepointSchedule(ctx, routeID, date)
+			if err != nil {
+				return err
+			}
+			tp = v
+			return nil
+		})
+		g.Go(func() error {
+			totalTrips, since = h.svc.RouteTrackingStats(ctx, routeID)
+			return nil
+		})
+		g.Go(func() error {
+			serviceDays = h.svc.RouteServiceDays(ctx, routeID, date)
+			return nil
+		})
+		g.Go(func() error {
+			cancelDays = h.svc.RouteCancelDays(ctx, routeID, date)
+			return nil
+		})
+		g.Go(func() error {
+			// Cancellation details is best-effort; errors here just leave the
+			// list empty rather than 500ing the whole page (matching prior
+			// behavior via `if ... == nil`).
+			if v, err := CancelledTripDetailsForRoute(ctx, h.svc.db, date, routeID); err == nil {
+				cancelledList = v
+			}
+			return nil
+		})
+		if err := g.Wait(); err != nil {
+			// RouteInfo failure is a 404; anything else reported by errgroup
+			// came from RouteTimepointSchedule (the only other returning error).
+			if info == nil {
+				http.NotFound(w, r)
+				return
+			}
 			httperr.Internal(w, err)
 			return
 		}
-		totalTrips, since := h.svc.RouteTrackingStats(r.Context(), routeID)
+
 		var sinceLabel string
 		if since != "" {
 			if t, err := time.ParseInLocation("2006-01-02", since, TZ); err == nil {
@@ -272,22 +327,20 @@ func (h *Handler) routePage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		vm := RouteViewModel{
-			RouteID:       info.RouteID,
-			ShortName:     info.ShortName,
-			LongName:      info.LongName,
-			Color:         info.Color,
-			TextColor:     info.TextColor,
-			Date:          date.Format("Monday, January 2"),
-			DateISO:       date.Format("2006-01-02"),
-			IsToday:       date.Format("2006-01-02") == ServiceDate().Format("2006-01-02"),
-			Unified:       UnifySchedules(tp),
-			TotalTrips:    totalTrips,
-			TrackingSince: sinceLabel,
-		}
-		vm.ServiceDays = h.svc.RouteServiceDays(r.Context(), routeID, date)
-		vm.CancelDays = h.svc.RouteCancelDays(r.Context(), routeID, date)
-		if allCancels, err := CancelledTripDetails(r.Context(), h.svc.db, date); err == nil {
-			vm.CancelledTrips = allCancels[routeID]
+			RouteID:        info.RouteID,
+			ShortName:      info.ShortName,
+			LongName:       info.LongName,
+			Color:          info.Color,
+			TextColor:      info.TextColor,
+			Date:           date.Format("Monday, January 2"),
+			DateISO:        date.Format("2006-01-02"),
+			IsToday:        date.Format("2006-01-02") == ServiceDate().Format("2006-01-02"),
+			Unified:        UnifySchedules(tp),
+			TotalTrips:     totalTrips,
+			TrackingSince:  sinceLabel,
+			ServiceDays:    serviceDays,
+			CancelDays:     cancelDays,
+			CancelledTrips: cancelledList,
 		}
 		h.render.Route(vm)(r.Context(), w)
 		return
@@ -350,8 +403,8 @@ func (h *Handler) routePage(w http.ResponseWriter, r *http.Request) {
 			vm.ServiceDays = h.svc.RouteServiceDays(r.Context(), routeID, date)
 			vm.CancelDays = h.svc.RouteCancelDays(r.Context(), routeID, date)
 			if partial == "1" {
-				if allCancels, err := CancelledTripDetails(r.Context(), h.svc.db, date); err == nil {
-					vm.CancelledTrips = allCancels[routeID]
+				if cancels, err := CancelledTripDetailsForRoute(r.Context(), h.svc.db, date, routeID); err == nil {
+					vm.CancelledTrips = cancels
 				}
 			}
 			if partial == "schedule" {

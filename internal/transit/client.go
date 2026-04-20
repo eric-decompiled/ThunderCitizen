@@ -135,11 +135,14 @@ func (c *Client) FetchVehicles(ctx context.Context) (*VehicleFeed, error) {
 	return &VehicleFeed{Timestamp: feedTS, Positions: positions}, nil
 }
 
-// FetchTrips fetches and parses the trip updates feed.
-func (c *Client) FetchTrips(ctx context.Context) (*TripFeed, error) {
+// FetchTrips fetches and parses the trip updates feed. Returns the parsed
+// TripFeed (delays + cancellations) and the underlying *gtfsrt.FeedMessage
+// so callers that need the raw stop-time updates (e.g. per-stop predictions)
+// can reuse the same fetch instead of re-hitting the upstream API.
+func (c *Client) FetchTrips(ctx context.Context) (*TripFeed, *gtfsrt.FeedMessage, error) {
 	feed, err := c.fetchFeed(ctx, TripFeedPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	feedTS := feedTimestamp(feed)
@@ -201,7 +204,7 @@ func (c *Client) FetchTrips(ctx context.Context) (*TripFeed, error) {
 		}
 	}
 
-	return &TripFeed{Timestamp: feedTS, Delays: delays, Cancellations: cancellations}, nil
+	return &TripFeed{Timestamp: feedTS, Delays: delays, Cancellations: cancellations}, feed, nil
 }
 
 // FetchAlerts fetches and parses the service alerts feed.
@@ -321,7 +324,7 @@ func (c *Client) FetchVehiclesWithDelay(ctx context.Context) ([]VehicleWithDelay
 	// Using the last entry would yield the propagated end-of-route arrival
 	// prediction, which isn't what riders care about in the moment.
 	tripDelay := map[string]int32{}
-	if tFeed, err := c.FetchTrips(ctx); err == nil {
+	if tFeed, _, err := c.FetchTrips(ctx); err == nil {
 		perTrip := map[string]int32{}
 		for _, d := range tFeed.Delays {
 			if _, already := perTrip[d.TripID]; already {
